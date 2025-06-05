@@ -1486,6 +1486,8 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
                     "chats": chats,
                     "favorites": stats.get('favorites', 0),
                     "impressions": stats.get('impressions', 0),
+                    
+                    # Почему-то для рекламы ('ads') берётся метрика 'spending', которая является суммой всех остальных расходов
                     "spending": {
                         "total": stats.get('allSpending', 0),
                         "ads": stats.get('spending', 0),

@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from bot.models import User, AvitoAccount, AvitoAccountDailyStats
 from bot.handlers.common import send_daily_report, send_weekly_report
+from django.db.models import Q
 from bot.services import get_access_token, get_user_balance_info, get_daily_statistics
 
 logger = logging.getLogger(__name__)

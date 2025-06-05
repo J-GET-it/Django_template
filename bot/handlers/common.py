@@ -970,7 +970,8 @@ def format_daily_report_new(account, response, previous_stats):
     message_text += f"Общие: {expenses_total:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
     
     # Расходы на продвижение
-    promo_expense = 0
+    # Изменил вместо 0
+    promo_expense = int(response['expenses']['details']['Продвижение объявлений']['amount'])
     percentage_promo = 0
     message_text += f"На продвижение: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     
@@ -1312,7 +1313,8 @@ def format_weekly_report_new(account, response, previous_stats):
     message_text += f"Общие: {expenses_total:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
     
     # Расходы на продвижение
-    promo_expense = 0
+    # Изменил вместо 0
+    promo_expense = int(response['expenses']['details']['Продвижение объявлений']['amount'])
     percentage_promo = 0
     message_text += f"На продвижение: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     

@@ -11,6 +11,7 @@ from telebot.apihelper import ApiTelegramException
 from telebot.types import Update
 
 from bot import bot, logger
+import telebot
 
 
 @require_GET

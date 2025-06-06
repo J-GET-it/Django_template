@@ -819,7 +819,7 @@ def get_daily_statistics(client_id, client_secret):
             profile_stats = get_profile_statistics(access_token, user_id, date_from=yesterday_date, date_to=yesterday_date)
         
         # Если статистика успешно получена, используем ее
-        if profile_stats:
+        if not profile_stats is None:
             # Используем статистику профиля для звонков и чатов
             total_calls = profile_stats.get('calls', 0)
             total_chats = profile_stats.get('chats', 0)
@@ -837,14 +837,20 @@ def get_daily_statistics(client_id, client_secret):
                 expenses_info = {
                     "total": spending.get('total', 0),
                     "details": {
-                        "Размещение объявлений": {
+                        "presense": {
                             "amount": spending.get('presence', 0),
                             "count": 1,
                             "type": "размещение",
                             "items": []
                         },
-                        "Продвижение объявлений": {
+                        "promo": {
                             "amount": spending.get('promo', 0),
+                            "count": 1,
+                            "type": "продвижение",
+                            "items": []
+                        },
+                        "sales": {
+                            "amount": spending.get('sales', 0),
                             "count": 1,
                             "type": "продвижение",
                             "items": []
@@ -1051,9 +1057,8 @@ def get_weekly_statistics(client_id, client_secret):
         if use_profile_stats:
             # Получаем расширенную статистику профиля
             profile_stats = get_profile_statistics(access_token, user_id, date_from=week_start_date, date_to=week_end_date)
-        
         # Если статистика успешно получена, используем ее
-        if profile_stats:
+        if not profile_stats is None:
             # Используем статистику профиля для звонков и чатов
             total_calls = profile_stats.get('calls', 0)
             total_chats = profile_stats.get('chats', 0)
@@ -1071,14 +1076,20 @@ def get_weekly_statistics(client_id, client_secret):
                 expenses_info = {
                     "total": spending.get('total', 0),
                     "details": {
-                        "Размещение объявлений": {
+                        "presense": {
                             "amount": spending.get('presence', 0),
                             "count": 1,
                             "type": "размещение",
                             "items": []
                         },
-                        "Продвижение объявлений": {
+                        "promo": {
                             "amount": spending.get('promo', 0),
+                            "count": 1,
+                            "type": "продвижение",
+                            "items": []
+                        },
+                        "sales": {
+                            "amount": spending.get('sales', 0),
                             "count": 1,
                             "type": "продвижение",
                             "items": []
@@ -1111,11 +1122,18 @@ def get_weekly_statistics(client_id, client_secret):
             except Exception as e:
                 logger.error(f"Ошибка при получении информации об объявлениях: {e}")
                 
-            try:
-                # Получаем информацию о расходах
-                expenses_info = get_operations_history(access_token, week_start, week_end)
-            except Exception as e:
-                logger.error(f"Ошибка при получении информации о расходах: {e}")
+            # try:
+            #     get_operations_history
+            #     # Получаем информацию о расходах
+            #     # expenses_info = get_operations_history(access_token, week_start, week_end)
+            #     expenses_info = {
+            #         "total": spending.get("total", 0),
+            #         "details": {
+            #             "promo": spending['details'].get()
+            #         }
+            #     }
+            # except Exception as e:
+            #     logger.error(f"Ошибка при получении информации о расходах: {e}")
         
         # Дополняем данные, которые нельзя получить из расширенной статистики
         try:
@@ -1329,6 +1347,143 @@ def get_operations_history(access_token, date_from, date_to):
             'details': {}
         }
 
+
+
+
+
+# def get_operations_history(access_token, date_from, date_to):
+#     """
+#     Получает историю операций пользователя за указанный период
+#     и возвращает детализацию расходов.
+    
+#     Args:
+#         access_token: Токен доступа к API
+#         date_from: Начало периода в формате строки ISO (например, '2023-04-01T00:00:00Z')
+#         date_to: Конец периода в формате строки ISO (например, '2023-04-08T00:00:00Z')
+        
+#     Returns:
+#         dict: Словарь с общей суммой расходов и детализацией по типам услуг
+#     """
+#     try:
+#         # URL для получения истории операций
+#         operations_url = 'https://api.avito.ru/core/v1/accounts/operations_history/'
+        
+#         # Заголовки запроса
+#         headers = {
+#             'Authorization': f'Bearer {access_token}',
+#             'Content-Type': 'application/json'
+#         }
+        
+#         # Данные запроса
+#         data = {
+#             'dateTimeFrom': date_from,
+#             'dateTimeTo': date_to,
+#             'limit': 1000  # Увеличиваем лимит для получения большего количества операций
+#         }
+        
+#         logger.info(f"Запрос истории операций с {date_from} по {date_to}")
+        
+#         # Выполняем запрос
+#         response = requests.post(operations_url, headers=headers, json=data)
+#         response.raise_for_status()
+        
+#         # Проверяем, что ответ не пустой
+#         if not response.text.strip():
+#             logger.error("Получен пустой ответ от API операций")
+#             return {'total': 0, 'details': {}}
+            
+#         # Парсим JSON ответ
+#         try:
+#             result = response.json()
+#             logger.info(f"Получен ответ от API операций с {len(result.get('operations', []))} операциями")
+#         except json.JSONDecodeError as e:
+#             logger.error(f"Ошибка декодирования JSON: {e}, содержимое ответа: {response.text}")
+#             return {'total': 0, 'details': {}}
+        
+#         # Инициализируем счетчики и структуру для детализации расходов
+#         total_expenses = 0
+#         expenses_details = {}
+        
+#         # Обрабатываем все операции
+#         for operation in result.get('operations', []):
+#             # Тип операции
+#             operation_type = operation.get('operationType', '')
+            
+#             # Считаем только операции расхода средств
+#             expense_types = [
+#                 'резервирование средств под услугу',
+#                 'списание за услугу',
+#                 'резервирование средств',
+#                 'списание средств',
+#                 'списание',
+#                 'оплата услуги'
+#             ]
+            
+#             if operation_type.lower() not in [t.lower() for t in expense_types]:
+#                 continue
+                
+#             # Получаем сумму расхода
+#             amount_rub = float(operation.get('amountRub', 0))
+#             if amount_rub <= 0:
+#                 continue
+                
+#             # Добавляем в общую сумму расходов
+#             total_expenses += amount_rub
+            
+#             # Получаем информацию о типе услуги
+#             service_name = operation.get('serviceName', 'Неизвестно')
+#             operation_name = operation.get('operationName', 'Неизвестно')
+#             service_type = operation.get('serviceType', 'Неизвестно')
+#             item_id = operation.get('itemId', 'Неизвестно')
+            
+#             # Формируем ключ для группировки
+#             key = f"{service_name}"
+#             if service_type and service_type != 'Неизвестно':
+#                 key += f" ({service_type})"
+            
+#             # Добавляем или обновляем запись в детализации
+#             if key in expenses_details:
+#                 expenses_details[key]['amount'] += amount_rub
+#                 expenses_details[key]['count'] += 1
+#                 if item_id and item_id != 'Неизвестно':
+#                     expenses_details[key]['items'].add(str(item_id))
+#             else:
+#                 expenses_details[key] = {
+#                     'amount': amount_rub,
+#                     'count': 1,
+#                     'type': operation_type,
+#                     'items': {str(item_id)} if item_id and item_id != 'Неизвестно' else set()
+#                 }
+        
+#         # Преобразуем множества объявлений в списки для сериализации JSON
+#         for key in expenses_details:
+#             expenses_details[key]['items'] = list(expenses_details[key]['items'])
+#             if len(expenses_details[key]['items']) == 1 and expenses_details[key]['items'][0] == 'Неизвестно':
+#                 expenses_details[key]['items'] = []
+        
+#         # Формируем структуру с результатами
+#         result = {
+#             'total': total_expenses,
+#             'details': expenses_details
+#         }
+        
+#         logger.info(f"Расходы за период: общая сумма {total_expenses:.2f} руб., {len(expenses_details)} категорий")
+#         return result
+#     except Exception as e:
+#         logger.error(f"Ошибка при получении истории операций: {e}")
+#         return {
+#             'total': 0,
+#             'details': {}
+#         }
+
+
+
+
+
+
+
+
+
 def get_daily_expenses(access_token):
     """Получает расходы за текущий день"""
     # Получаем текущую дату и начало дня
@@ -1403,6 +1558,8 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
         
         if date_to is None:
             date_to = datetime.datetime.now().strftime("%Y-%m-%d")
+
+            
         
         # URL для получения статистики
         stats_url = f'https://api.avito.ru/stats/v2/accounts/{user_id}/items'
@@ -1412,6 +1569,16 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json'
         }
+        offers_url = 'https://api.avito.ru/special-offers/v1/stats'
+        offers_states = {
+            "dateTimeFrom": f"{date_to}T00:00:00Z",
+            "dateTimeTo": f"{date_from}T23:59:59Z",
+            }
+
+        offers_response = requests.post(offers_url, headers=headers, json=offers_states)
+        offers_sum = 0
+        for item in offers_response.json().get('stats', {}):
+            offers_sum += item['price']
         
         # Набор всех нужных метрик
         metrics = [
@@ -1489,14 +1656,14 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
                     
                     # Почему-то для рекламы ('ads') берётся метрика 'spending', которая является суммой всех остальных расходов
                     "spending": {
-                        "total": stats.get('allSpending', 0),
+                        "total": stats.get('spending', 0) + offers_sum,
                         "ads": stats.get('spending', 0),
                         "presence": stats.get('presenceSpending', 0),
-                        "promo": stats.get('promoSpending', 0)
+                        "promo": stats.get('promoSpending', 0),
+                        'sales': offers_sum
                     },
                     "active_items": stats.get('activeItems', 0)
                 }
-                
                 logger.info(f"Получена статистика: просмотры: {result_dict['views']}, контакты: {result_dict['contacts']}, звонки: {result_dict['calls']}, чаты: {result_dict['chats']}")
                 
                 # Сохраняем результат в кэш

@@ -967,21 +967,21 @@ def format_daily_report_new(account, response, previous_stats):
     percentage_expenses = 0
     if previous_stats and previous_stats.daily_expense > 0:
         percentage_expenses = calculate_percentage_change(expenses_total, previous_stats.daily_expense)
-    message_text += f"Общие: {expenses_total:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
+    message_text += f"Общие: {response['expenses']['total'] / 100:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
     
     # Расходы на продвижение
     # Изменил вместо 0
-    promo_expense = int(response['expenses']['details']['Продвижение объявлений']['amount'])
+    promo_expense = response['expenses']['details']['promo']['amount'] / 100
     percentage_promo = 0
     message_text += f"На продвижение: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     
     # Расходы на XL и выделение
-    xl_expense = 0
+    xl_expense = response['expenses']['details']['presense']['amount'] / 100
     percentage_xl = 0
     message_text += f"На XL и выделение: {xl_expense:,} ₽ ({format_simple_percentage(percentage_xl)})\n".replace(',', ' ')
     
     # Рассылка скидок
-    discount_expense = 0
+    discount_expense = response['expenses']['details']['sales']['amount']
     percentage_discount = 0
     message_text += f"Рассылка скидок: {discount_expense:,} ₽ ({format_simple_percentage(percentage_discount)})\n\n".replace(',', ' ')
     
@@ -1310,21 +1310,21 @@ def format_weekly_report_new(account, response, previous_stats):
     percentage_expenses = 0
     if previous_stats and previous_stats.daily_expense > 0:
         percentage_expenses = calculate_percentage_change(expenses_total, previous_stats.daily_expense)
-    message_text += f"Общие: {expenses_total:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
+    message_text += f"Общие: {expenses_total / 100:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
     
     # Расходы на продвижение
     # Изменил вместо 0
-    promo_expense = int(response['expenses']['details']['Продвижение объявлений']['amount'])
+    promo_expense = response['expenses']['details']['promo']['amount'] / 100
     percentage_promo = 0
     message_text += f"На продвижение: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     
     # Расходы на XL и выделение
-    xl_expense = 0
+    xl_expense = response['expenses']['details']['presense']['amount'] / 100
     percentage_xl = 0
     message_text += f"На XL и выделение: {xl_expense:,} ₽ ({format_simple_percentage(percentage_xl)})\n".replace(',', ' ')
     
     # Рассылка скидок
-    discount_expense = 0
+    discount_expense = response['expenses']['details']['sales']['amount']
     percentage_discount = 0
     message_text += f"Рассылка скидок: {discount_expense:,} ₽ ({format_simple_percentage(percentage_discount)})\n\n".replace(',', ' ')
     

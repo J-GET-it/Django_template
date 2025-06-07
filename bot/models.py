@@ -210,6 +210,155 @@ class AvitoAccountDailyStats(models.Model):
         return f"Статистика {self.avito_account.name} за {self.date}"
 
 
+class AvitoAccountWeeklyStats(models.Model):
+    """Модель для хранения еженедельной статистики аккаунта Авито"""
+    avito_account = models.ForeignKey(
+        AvitoAccount,
+        on_delete=models.CASCADE,
+        related_name='weekly_stats',
+        verbose_name='Аккаунт Авито'
+    )
+    week_start_date = models.DateField(
+        verbose_name='Начало недели'
+    )
+    week_end_date = models.DateField(
+        verbose_name='Конец недели'
+    )
+    period = models.CharField(
+        max_length=50,
+        verbose_name='Период',
+        blank=True
+    )
+    
+    # Основные показатели
+    total_calls = models.IntegerField(
+        verbose_name='Всего звонков',
+        default=0
+    )
+    answered_calls = models.IntegerField(
+        verbose_name='Отвеченные звонки',
+        default=0
+    )
+    missed_calls = models.IntegerField(
+        verbose_name='Пропущенные звонки',
+        default=0
+    )
+    
+    total_chats = models.IntegerField(
+        verbose_name='Всего чатов',
+        default=0
+    )
+    new_chats = models.IntegerField(
+        verbose_name='Новые чаты',
+        default=0
+    )
+    
+    phones_received = models.IntegerField(
+        verbose_name='Показы телефона',
+        default=0
+    )
+    
+    # Рейтинг и отзывы
+    rating = models.FloatField(
+        verbose_name='Рейтинг',
+        default=0
+    )
+    total_reviews = models.IntegerField(
+        verbose_name='Всего отзывов',
+        default=0
+    )
+    weekly_reviews = models.IntegerField(
+        verbose_name='Отзывы за неделю',
+        default=0
+    )
+    
+    # Объявления
+    total_items = models.IntegerField(
+        verbose_name='Всего объявлений',
+        default=0
+    )
+    xl_promotion_count = models.IntegerField(
+        verbose_name='Объявления с XL продвижением',
+        default=0
+    )
+    
+    # Статистика просмотров и контактов
+    views = models.IntegerField(
+        verbose_name='Просмотры',
+        default=0
+    )
+    contacts = models.IntegerField(
+        verbose_name='Контакты',
+        default=0
+    )
+    favorites = models.IntegerField(
+        verbose_name='В избранном',
+        default=0
+    )
+    
+    # Финансы
+    balance_real = models.FloatField(
+        verbose_name='Реальный баланс',
+        default=0
+    )
+    balance_bonus = models.FloatField(
+        verbose_name='Бонусы',
+        default=0
+    )
+    advance = models.FloatField(
+        verbose_name='Аванс',
+        default=0
+    )
+    cpa_balance = models.FloatField(
+        verbose_name='CPA баланс',
+        default=0
+    )
+    weekly_expense = models.FloatField(
+        verbose_name='Расход за неделю',
+        default=0
+    )
+    
+    # Детализация расходов (JSON поле)
+    expenses_details = models.TextField(
+        verbose_name='Детализация расходов',
+        blank=True,
+        null=True,
+        help_text='JSON с детализацией расходов'
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата создания записи'
+    )
+    
+    class Meta:
+        verbose_name = 'Еженедельная статистика аккаунта'
+        verbose_name_plural = 'Еженедельная статистика аккаунтов'
+        # Уникальное ограничение по аккаунту и началу недели
+        unique_together = ('avito_account', 'week_start_date')
+        # Сортировка по убыванию даты начала недели
+        ordering = ['-week_start_date']
+    
+    def __str__(self):
+        return f"{self.avito_account.name} - {self.period}"
+    
+    def get_expenses_details(self):
+        """Возвращает детализацию расходов в виде словаря"""
+        if self.expenses_details:
+            try:
+                return json.loads(self.expenses_details)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+    
+    def set_expenses_details(self, details_dict):
+        """Сохраняет детализацию расходов в JSON формате"""
+        if details_dict:
+            self.expenses_details = json.dumps(details_dict, ensure_ascii=False)
+        else:
+            self.expenses_details = None
+
+
 class Settings(models.Model):
     """Модель для хранения настроек приложения"""
     key = models.CharField(

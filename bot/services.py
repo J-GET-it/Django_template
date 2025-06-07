@@ -837,7 +837,7 @@ def get_daily_statistics(client_id, client_secret):
                 expenses_info = {
                     "total": spending.get('total', 0),
                     "details": {
-                        "presense": {
+                        "presence": {
                             "amount": spending.get('presence', 0),
                             "count": 1,
                             "type": "размещение",
@@ -859,7 +859,13 @@ def get_daily_statistics(client_id, client_secret):
                 }
             
             # Обновляем информацию о количестве объявлений
-            promotion_info["total_items"] = profile_stats.get('active_items', 0)
+            # Получаем правильное количество объявлений через API
+            try:
+                total_items = get_total_items_count(access_token, status="active")
+                promotion_info["total_items"] = total_items
+            except Exception as e:
+                logger.error(f"Ошибка при получении количества объявлений: {e}")
+                promotion_info["total_items"] = profile_stats.get('active_items', 0)  # Fallback
             
             # Сбрасываем счетчик ошибок
             get_daily_statistics._profile_stats_errors = (datetime.datetime.min, 0)
@@ -892,9 +898,16 @@ def get_daily_statistics(client_id, client_secret):
                 
             try:
                 # Получаем информацию о объявлениях за вчерашний день
-                item_ids = get_user_items_stats(access_token, user_id, date_from=yesterday_start, date_to=yesterday_end)
+                # Получаем общее количество активных объявлений
+                total_items = get_total_items_count(access_token, status="active")
+                
+                # Получаем ID объявлений для статистики и продвижения (ограниченное количество)
+                item_ids = get_user_items_stats(access_token, user_id, status="active", per_page=100)
                 items_stats = get_items_statistics(access_token, user_id, item_ids, date_from=yesterday_start, date_to=yesterday_end)
+                
+                # Получаем информацию о продвижении, но используем правильное общее количество
                 promotion_info = get_item_promotion_info(access_token, user_id, item_ids)
+                promotion_info["total_items"] = total_items  # Заменяем на правильное количество
             except Exception as e:
                 logger.error(f"Ошибка при получении информации об объявлениях: {e}")
                 
@@ -926,6 +939,13 @@ def get_daily_statistics(client_id, client_secret):
             logger.error(f"Ошибка при получении информации о балансе: {e}")
         
         try:
+            # Получаем CPA баланс
+            cpa_balance = get_cpa_balance(access_token)
+        except Exception as e:
+            logger.error(f"Ошибка при получении CPA баланса: {e}")
+            cpa_balance = 0
+        
+        try:
             # Получаем рейтинг и отзывы
             rating = get_user_rating_info(access_token)
             reviews_info = get_user_reviews(access_token, yesterday_start, yesterday_end)
@@ -943,6 +963,7 @@ def get_daily_statistics(client_id, client_secret):
             "balance_real": balance_info["balance_real"],
             "balance_bonus": balance_info["balance_bonus"],
             "advance": balance_info["advance"],
+            "cpa_balance": cpa_balance,
             "expenses": expenses_info,
             "chats": {
                 "total": total_chats,
@@ -983,6 +1004,7 @@ def get_daily_statistics(client_id, client_secret):
             "balance_real": 0,
             "balance_bonus": 0,
             "advance": 0,
+            "cpa_balance": 0,
             "expenses": {"total": 0, "details": {}},
             "chats": {"total": 0, "new": 0},
             "phones_received": 0,
@@ -1076,7 +1098,7 @@ def get_weekly_statistics(client_id, client_secret):
                 expenses_info = {
                     "total": spending.get('total', 0),
                     "details": {
-                        "presense": {
+                        "presence": {
                             "amount": spending.get('presence', 0),
                             "count": 1,
                             "type": "размещение",
@@ -1098,7 +1120,13 @@ def get_weekly_statistics(client_id, client_secret):
                 }
             
             # Обновляем информацию о количестве объявлений
-            promotion_info["total_items"] = profile_stats.get('active_items', 0)
+            # Получаем правильное количество объявлений через API
+            try:
+                total_items = get_total_items_count(access_token, status="active")
+                promotion_info["total_items"] = total_items
+            except Exception as e:
+                logger.error(f"Ошибка при получении количества объявлений: {e}")
+                promotion_info["total_items"] = profile_stats.get('active_items', 0)  # Fallback
         else:
             # Если расширенная статистика недоступна, используем старые методы
             try:
@@ -1116,9 +1144,16 @@ def get_weekly_statistics(client_id, client_secret):
                 
             try:
                 # Получаем информацию о объявлениях
-                item_ids = get_user_items_stats(access_token, user_id, date_from=week_start, date_to=week_end)
+                # Получаем общее количество активных объявлений
+                total_items = get_total_items_count(access_token, status="active")
+                
+                # Получаем ID объявлений для статистики и продвижения (ограниченное количество)
+                item_ids = get_user_items_stats(access_token, user_id, status="active", per_page=100)
                 items_stats = get_items_statistics(access_token, user_id, item_ids, date_from=week_start, date_to=week_end)
+                
+                # Получаем информацию о продвижении, но используем правильное общее количество
                 promotion_info = get_item_promotion_info(access_token, user_id, item_ids)
+                promotion_info["total_items"] = total_items  # Заменяем на правильное количество
             except Exception as e:
                 logger.error(f"Ошибка при получении информации об объявлениях: {e}")
                 
@@ -1157,6 +1192,13 @@ def get_weekly_statistics(client_id, client_secret):
             logger.error(f"Ошибка при получении информации о балансе: {e}")
         
         try:
+            # Получаем CPA баланс
+            cpa_balance = get_cpa_balance(access_token)
+        except Exception as e:
+            logger.error(f"Ошибка при получении CPA баланса: {e}")
+            cpa_balance = 0
+        
+        try:
             # Получаем рейтинг и отзывы
             rating = get_user_rating_info(access_token)
             reviews_info = get_user_reviews(access_token, week_start, week_end)
@@ -1174,6 +1216,7 @@ def get_weekly_statistics(client_id, client_secret):
             "balance_real": balance_info["balance_real"],
             "balance_bonus": balance_info["balance_bonus"],
             "advance": balance_info["advance"],
+            "cpa_balance": cpa_balance,
             "expenses": expenses_info,
             "chats": {
                 "total": total_chats,
@@ -1213,6 +1256,7 @@ def get_weekly_statistics(client_id, client_secret):
             "balance_real": 0,
             "balance_bonus": 0,
             "advance": 0,
+            "cpa_balance": 0,
             "expenses": {"total": 0, "details": {}},
             "chats": {"total": 0, "new": 0},
             "phones_received": 0,
@@ -1346,139 +1390,6 @@ def get_operations_history(access_token, date_from, date_to):
             'total': 0,
             'details': {}
         }
-
-
-
-
-
-# def get_operations_history(access_token, date_from, date_to):
-#     """
-#     Получает историю операций пользователя за указанный период
-#     и возвращает детализацию расходов.
-    
-#     Args:
-#         access_token: Токен доступа к API
-#         date_from: Начало периода в формате строки ISO (например, '2023-04-01T00:00:00Z')
-#         date_to: Конец периода в формате строки ISO (например, '2023-04-08T00:00:00Z')
-        
-#     Returns:
-#         dict: Словарь с общей суммой расходов и детализацией по типам услуг
-#     """
-#     try:
-#         # URL для получения истории операций
-#         operations_url = 'https://api.avito.ru/core/v1/accounts/operations_history/'
-        
-#         # Заголовки запроса
-#         headers = {
-#             'Authorization': f'Bearer {access_token}',
-#             'Content-Type': 'application/json'
-#         }
-        
-#         # Данные запроса
-#         data = {
-#             'dateTimeFrom': date_from,
-#             'dateTimeTo': date_to,
-#             'limit': 1000  # Увеличиваем лимит для получения большего количества операций
-#         }
-        
-#         logger.info(f"Запрос истории операций с {date_from} по {date_to}")
-        
-#         # Выполняем запрос
-#         response = requests.post(operations_url, headers=headers, json=data)
-#         response.raise_for_status()
-        
-#         # Проверяем, что ответ не пустой
-#         if not response.text.strip():
-#             logger.error("Получен пустой ответ от API операций")
-#             return {'total': 0, 'details': {}}
-            
-#         # Парсим JSON ответ
-#         try:
-#             result = response.json()
-#             logger.info(f"Получен ответ от API операций с {len(result.get('operations', []))} операциями")
-#         except json.JSONDecodeError as e:
-#             logger.error(f"Ошибка декодирования JSON: {e}, содержимое ответа: {response.text}")
-#             return {'total': 0, 'details': {}}
-        
-#         # Инициализируем счетчики и структуру для детализации расходов
-#         total_expenses = 0
-#         expenses_details = {}
-        
-#         # Обрабатываем все операции
-#         for operation in result.get('operations', []):
-#             # Тип операции
-#             operation_type = operation.get('operationType', '')
-            
-#             # Считаем только операции расхода средств
-#             expense_types = [
-#                 'резервирование средств под услугу',
-#                 'списание за услугу',
-#                 'резервирование средств',
-#                 'списание средств',
-#                 'списание',
-#                 'оплата услуги'
-#             ]
-            
-#             if operation_type.lower() not in [t.lower() for t in expense_types]:
-#                 continue
-                
-#             # Получаем сумму расхода
-#             amount_rub = float(operation.get('amountRub', 0))
-#             if amount_rub <= 0:
-#                 continue
-                
-#             # Добавляем в общую сумму расходов
-#             total_expenses += amount_rub
-            
-#             # Получаем информацию о типе услуги
-#             service_name = operation.get('serviceName', 'Неизвестно')
-#             operation_name = operation.get('operationName', 'Неизвестно')
-#             service_type = operation.get('serviceType', 'Неизвестно')
-#             item_id = operation.get('itemId', 'Неизвестно')
-            
-#             # Формируем ключ для группировки
-#             key = f"{service_name}"
-#             if service_type and service_type != 'Неизвестно':
-#                 key += f" ({service_type})"
-            
-#             # Добавляем или обновляем запись в детализации
-#             if key in expenses_details:
-#                 expenses_details[key]['amount'] += amount_rub
-#                 expenses_details[key]['count'] += 1
-#                 if item_id and item_id != 'Неизвестно':
-#                     expenses_details[key]['items'].add(str(item_id))
-#             else:
-#                 expenses_details[key] = {
-#                     'amount': amount_rub,
-#                     'count': 1,
-#                     'type': operation_type,
-#                     'items': {str(item_id)} if item_id and item_id != 'Неизвестно' else set()
-#                 }
-        
-#         # Преобразуем множества объявлений в списки для сериализации JSON
-#         for key in expenses_details:
-#             expenses_details[key]['items'] = list(expenses_details[key]['items'])
-#             if len(expenses_details[key]['items']) == 1 and expenses_details[key]['items'][0] == 'Неизвестно':
-#                 expenses_details[key]['items'] = []
-        
-#         # Формируем структуру с результатами
-#         result = {
-#             'total': total_expenses,
-#             'details': expenses_details
-#         }
-        
-#         logger.info(f"Расходы за период: общая сумма {total_expenses:.2f} руб., {len(expenses_details)} категорий")
-#         return result
-#     except Exception as e:
-#         logger.error(f"Ошибка при получении истории операций: {e}")
-#         return {
-#             'total': 0,
-#             'details': {}
-#         }
-
-
-
-
 
 
 
@@ -1692,3 +1603,142 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
     except Exception as e:
         logger.error(f"Ошибка при получении расширенной статистики профиля: {e}")
         return {}
+
+def get_total_items_count(access_token, status="active"):
+    """Получает общее количество объявлений пользователя."""
+    try:
+        items_url = 'https://api.avito.ru/core/v1/items'
+        items_headers = {
+            'Authorization': f'Bearer {access_token}'
+        }
+        
+        # Запрашиваем первую страницу с минимальным количеством элементов для получения мета-информации
+        params = {
+            'status': status,
+            'per_page': 1,  # Минимальное количество для получения мета-информации
+            'page': 1
+        }
+        
+        logger.info(f"Запрос общего количества объявлений со статусом '{status}'")
+        
+        response = requests.get(items_url, headers=items_headers, params=params)
+        response.raise_for_status()
+        
+        # Проверяем, что ответ не пустой
+        if not response.text.strip():
+            logger.warning("Получен пустой ответ от API объявлений")
+            return 0
+        
+        try:
+            result = response.json()
+            
+            # Получаем мета-информацию о пагинации
+            meta = result.get('meta', {})
+            per_page = meta.get('per_page', 1)
+            current_page = meta.get('page', 1)
+            
+            # Получаем количество объявлений на текущей странице
+            resources = result.get('resources', [])
+            items_on_page = len(resources)
+            
+            # Если на первой странице меньше объявлений чем per_page, значит это все объявления
+            if items_on_page < per_page:
+                total_items = items_on_page
+                logger.info(f"Найдено {total_items} объявлений (все на одной странице)")
+                return total_items
+            
+            # Иначе нужно получить все страницы для точного подсчета
+            total_items = 0
+            page = 1
+            max_pages = 100  # Ограничение для безопасности
+            
+            while page <= max_pages:
+                params['page'] = page
+                params['per_page'] = 100  # Увеличиваем размер страницы для эффективности
+                
+                response = requests.get(items_url, headers=items_headers, params=params)
+                response.raise_for_status()
+                
+                if not response.text.strip():
+                    break
+                    
+                page_result = response.json()
+                page_resources = page_result.get('resources', [])
+                
+                if not page_resources:
+                    break
+                    
+                total_items += len(page_resources)
+                
+                # Если получили меньше объявлений чем запрашивали, значит это последняя страница
+                if len(page_resources) < params['per_page']:
+                    break
+                    
+                page += 1
+            
+            logger.info(f"Найдено {total_items} объявлений со статусом '{status}' (проверено {page} страниц)")
+            return total_items
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Ошибка декодирования JSON: {e}, содержимое ответа: {response.text[:200]}")
+            return 0
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка запроса к API объявлений: {e}")
+        return 0
+    except Exception as e:
+        logger.error(f"Непредвиденная ошибка при получении количества объявлений: {e}")
+        return 0
+
+def get_cpa_balance(access_token):
+    """
+    Получает CPA баланс пользователя через API /cpa/v3/balanceInfo
+    
+    Args:
+        access_token: Токен доступа к API
+        
+    Returns:
+        float: CPA баланс в рублях
+    """
+    try:
+        # URL для получения CPA баланса
+        cpa_balance_url = 'https://api.avito.ru/cpa/v3/balanceInfo'
+        
+        # Заголовки запроса
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Пустое тело запроса согласно документации
+        data = {}
+        
+        logger.info("Запрос CPA баланса")
+        
+        # Выполняем запрос
+        response = requests.post(cpa_balance_url, headers=headers, json=data)
+        response.raise_for_status()
+        
+        # Проверяем, что ответ не пустой
+        if not response.text.strip():
+            logger.error("Получен пустой ответ от API CPA баланса")
+            return 0
+            
+        # Парсим JSON ответ
+        try:
+            balance_data = response.json()
+            cpa_balance = balance_data.get('balance', 0)
+            
+            # Конвертируем из копеек в рубли
+            cpa_balance_rub = cpa_balance / 100
+            
+            logger.info(f"Получен CPA баланс: {cpa_balance_rub} ₽")
+            return cpa_balance_rub
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Ошибка декодирования JSON CPA баланса: {e}, содержимое ответа: {response.text}")
+            return 0
+            
+    except Exception as e:
+        logger.error(f"Ошибка при получении CPA баланса: {e}")
+        return 0

@@ -3,6 +3,7 @@ from bot.models import User, AvitoAccount, UserAvitoAccount, AvitoAccountDailySt
 from bot.keyboards import main_markup
 from bot.texts import MAIN_TEXT
 from bot.services import get_daily_statistics, get_weekly_statistics
+from bot.cron import store_account_daily_stats, store_account_weekly_stats
 import telebot
 from django.db import models
 import datetime
@@ -11,6 +12,32 @@ from django.utils import timezone
 import logging
 
 logger = logging.getLogger(__name__)
+
+class WeeklySummary:
+    """Класс для хранения суммарной статистики за неделю"""
+    def __init__(self, total_calls=0, answered_calls=0, missed_calls=0, total_chats=0, 
+                 new_chats=0, phones_received=0, rating=0, total_reviews=0, 
+                 daily_reviews=0, total_items=0, xl_promotion_count=0, 
+                 views=0, contacts=0, favorites=0, balance_real=0, 
+                 balance_bonus=0, advance=0, daily_expense=0):
+        self.total_calls = total_calls
+        self.answered_calls = answered_calls
+        self.missed_calls = missed_calls
+        self.total_chats = total_chats
+        self.new_chats = new_chats
+        self.phones_received = phones_received
+        self.rating = rating
+        self.total_reviews = total_reviews
+        self.daily_reviews = daily_reviews
+        self.total_items = total_items
+        self.xl_promotion_count = xl_promotion_count
+        self.views = views
+        self.contacts = contacts
+        self.favorites = favorites
+        self.balance_real = balance_real
+        self.balance_bonus = balance_bonus
+        self.advance = advance
+        self.daily_expense = daily_expense
 
 def start(message):
     """Обработчик команды /start"""
@@ -191,63 +218,182 @@ def get_previous_day_stats(account_id, current_date):
     try:
         # Получаем дату предыдущего дня
         previous_date = current_date - datetime.timedelta(days=1)
+        logger.info(f"ОТЛАДКА: Ищем статистику для аккаунта {account_id} за {previous_date}")
+        
         # Ищем статистику за предыдущий день
         previous_stats = AvitoAccountDailyStats.objects.filter(
             avito_account_id=account_id,
             date=previous_date
         ).first()
+        
+        if previous_stats:
+            logger.info(f"ОТЛАДКА: Найдена статистика за {previous_date} - звонки: {previous_stats.total_calls}, просмотры: {previous_stats.views}, контакты: {previous_stats.contacts}")
+        else:
+            logger.warning(f"ОТЛАДКА: НЕ найдена статистика за {previous_date} для аккаунта {account_id}")
+            
+            # Попробуем найти любую последнюю доступную статистику до текущей даты
+            last_available = AvitoAccountDailyStats.objects.filter(
+                avito_account_id=account_id,
+                date__lt=current_date
+            ).order_by('-date').first()
+            
+            if last_available:
+                logger.info(f"ОТЛАДКА: Найдена альтернативная статистика за {last_available.date} - звонки: {last_available.total_calls}, просмотры: {last_available.views}, контакты: {last_available.contacts}")
+                return last_available
+            else:
+                logger.warning(f"ОТЛАДКА: Вообще нет статистики для аккаунта {account_id}")
+        
         return previous_stats
     except Exception as e:
         logger.error(f"Ошибка при получении статистики за предыдущий день: {e}")
         return None
 
 def get_previous_week_stats(account_id, current_date):
-    """Получает статистику за предыдущую неделю (суммарно)"""
+    """Получает статистику за предыдущую неделю из базы данных"""
     try:
-        # Получаем начало предыдущей недели
-        week_start = current_date - datetime.timedelta(days=14)
-        week_end = current_date - datetime.timedelta(days=7)
+        # Импортируем модель недельной статистики
+        from bot.models import AvitoAccountWeeklyStats
         
-        # Получаем все записи за предыдущую неделю
-        previous_week_stats = AvitoAccountDailyStats.objects.filter(
+        # Рассчитываем даты для поиска предыдущей недели
+        # Если сегодня понедельник, то предыдущая неделя закончилась в прошлое воскресенье
+        days_since_monday = current_date.weekday()
+        current_week_start = current_date - datetime.timedelta(days=days_since_monday)
+        previous_week_start = current_week_start - datetime.timedelta(days=7)
+        
+        logger.info(f"ОТЛАДКА: Ищем недельную статистику для аккаунта {account_id} начиная с {previous_week_start}")
+        
+        # Ищем статистику за предыдущую неделю в новой модели
+        previous_week_stats = AvitoAccountWeeklyStats.objects.filter(
             avito_account_id=account_id,
-            date__gte=week_start,
-            date__lt=week_end
-        )
+            week_start_date=previous_week_start
+        ).first()
         
-        # Если нет данных, возвращаем None
-        if not previous_week_stats.exists():
-            return None
+        if previous_week_stats:
+            logger.info(f"ОТЛАДКА: Найдена недельная статистика за {previous_week_stats.week_start_date} - {previous_week_stats.week_end_date} - звонки: {previous_week_stats.total_calls}, просмотры: {previous_week_stats.views}, контакты: {previous_week_stats.contacts}")
             
-        # Суммируем данные
-        total_calls = sum(stats.total_calls for stats in previous_week_stats)
-        answered_calls = sum(stats.answered_calls for stats in previous_week_stats)
-        missed_calls = sum(stats.missed_calls for stats in previous_week_stats)
-        total_chats = sum(stats.total_chats for stats in previous_week_stats)
-        new_chats = sum(stats.new_chats for stats in previous_week_stats)
-        phones_received = sum(stats.phones_received for stats in previous_week_stats)
-        views = sum(stats.views for stats in previous_week_stats)
-        contacts = sum(stats.contacts for stats in previous_week_stats)
-        favorites = sum(stats.favorites for stats in previous_week_stats)
-        daily_reviews = sum(stats.daily_reviews for stats in previous_week_stats)
-        daily_expense = sum(stats.daily_expense for stats in previous_week_stats)
-        
-        # Создаем объект с суммарными данными
-        class WeeklySummary:
-            def __init__(self):
-                self.total_calls = total_calls
-                self.answered_calls = answered_calls
-                self.missed_calls = missed_calls
-                self.total_chats = total_chats
-                self.new_chats = new_chats
-                self.phones_received = phones_received
-                self.views = views
-                self.contacts = contacts
-                self.favorites = favorites
-                self.daily_reviews = daily_reviews
-                self.daily_expense = daily_expense
+            # Возвращаем объект WeeklySummary с данными из базы
+            return WeeklySummary(
+                total_calls=previous_week_stats.total_calls,
+                answered_calls=previous_week_stats.answered_calls,
+                missed_calls=previous_week_stats.missed_calls,
+                total_chats=previous_week_stats.total_chats,
+                new_chats=previous_week_stats.new_chats,
+                phones_received=previous_week_stats.phones_received,
+                rating=previous_week_stats.rating,
+                total_reviews=previous_week_stats.total_reviews,
+                daily_reviews=previous_week_stats.weekly_reviews,
+                total_items=previous_week_stats.total_items,
+                xl_promotion_count=previous_week_stats.xl_promotion_count,
+                views=previous_week_stats.views,
+                contacts=previous_week_stats.contacts,
+                favorites=previous_week_stats.favorites,
+                balance_real=previous_week_stats.balance_real,
+                balance_bonus=previous_week_stats.balance_bonus,
+                advance=previous_week_stats.advance,
+                daily_expense=previous_week_stats.weekly_expense
+            )
+        else:
+            logger.warning(f"ОТЛАДКА: НЕ найдена недельная статистика за {previous_week_start} для аккаунта {account_id}")
+            
+            # Если нет данных в новой модели, попробуем найти любую предыдущую недельную статистику
+            any_previous_stats = AvitoAccountWeeklyStats.objects.filter(
+                avito_account_id=account_id,
+                week_start_date__lt=current_week_start
+            ).order_by('-week_start_date').first()
+            
+            if any_previous_stats:
+                logger.info(f"ОТЛАДКА: Найдена альтернативная недельная статистика за {any_previous_stats.week_start_date} - {any_previous_stats.week_end_date}")
                 
-        return WeeklySummary()
+                return WeeklySummary(
+                    total_calls=any_previous_stats.total_calls,
+                    answered_calls=any_previous_stats.answered_calls,
+                    missed_calls=any_previous_stats.missed_calls,
+                    total_chats=any_previous_stats.total_chats,
+                    new_chats=any_previous_stats.new_chats,
+                    phones_received=any_previous_stats.phones_received,
+                    rating=any_previous_stats.rating,
+                    total_reviews=any_previous_stats.total_reviews,
+                    daily_reviews=any_previous_stats.weekly_reviews,
+                    total_items=any_previous_stats.total_items,
+                    xl_promotion_count=any_previous_stats.xl_promotion_count,
+                    views=any_previous_stats.views,
+                    contacts=any_previous_stats.contacts,
+                    favorites=any_previous_stats.favorites,
+                    balance_real=any_previous_stats.balance_real,
+                    balance_bonus=any_previous_stats.balance_bonus,
+                    advance=any_previous_stats.advance,
+                    daily_expense=any_previous_stats.weekly_expense
+                )
+            else:
+                logger.warning(f"ОТЛАДКА: Вообще нет недельной статистики для аккаунта {account_id}")
+                
+                # Если нет недельной статистики, попробуем агрегировать из дневной (fallback)
+                # Получаем начало предыдущей недели
+                week_start = current_date - datetime.timedelta(days=14)
+                week_end = current_date - datetime.timedelta(days=7)
+                
+                logger.info(f"ОТЛАДКА: Fallback - агрегируем дневную статистику с {week_start} по {week_end}")
+                
+                # Получаем все записи за предыдущую неделю из дневной статистики
+                previous_week_daily_stats = AvitoAccountDailyStats.objects.filter(
+                    avito_account_id=account_id,
+                    date__gte=week_start,
+                    date__lt=week_end
+                )
+                
+                if previous_week_daily_stats.exists():
+                    logger.info(f"ОТЛАДКА: Найдено {previous_week_daily_stats.count()} записей дневной статистики для агрегации")
+                    
+                    # Суммируем данные
+                    total_calls = sum(stats.total_calls for stats in previous_week_daily_stats)
+                    answered_calls = sum(stats.answered_calls for stats in previous_week_daily_stats)
+                    missed_calls = sum(stats.missed_calls for stats in previous_week_daily_stats)
+                    total_chats = sum(stats.total_chats for stats in previous_week_daily_stats)
+                    new_chats = sum(stats.new_chats for stats in previous_week_daily_stats)
+                    phones_received = sum(stats.phones_received for stats in previous_week_daily_stats)
+                    views = sum(stats.views for stats in previous_week_daily_stats)
+                    contacts = sum(stats.contacts for stats in previous_week_daily_stats)
+                    favorites = sum(stats.favorites for stats in previous_week_daily_stats)
+                    daily_expense = sum(stats.daily_expense for stats in previous_week_daily_stats)
+                    
+                    # Берем последние значения (не суммируем)
+                    last_stat = previous_week_daily_stats.order_by('-date').first()
+                    rating = last_stat.rating if last_stat else 0
+                    total_reviews = last_stat.total_reviews if last_stat else 0
+                    daily_reviews = sum(stats.daily_reviews for stats in previous_week_daily_stats)
+                    total_items = last_stat.total_items if last_stat else 0
+                    xl_promotion_count = last_stat.xl_promotion_count if last_stat else 0
+                    balance_real = last_stat.balance_real if last_stat else 0
+                    balance_bonus = last_stat.balance_bonus if last_stat else 0
+                    advance = last_stat.advance if last_stat else 0
+                    
+                    logger.info(f"ОТЛАДКА: Агрегированная статистика - звонки: {total_calls}, просмотры: {views}, контакты: {contacts}")
+                    
+                    # Возвращаем объект WeeklySummary
+                    return WeeklySummary(
+                        total_calls=total_calls,
+                        answered_calls=answered_calls,
+                        missed_calls=missed_calls,
+                        total_chats=total_chats,
+                        new_chats=new_chats,
+                        phones_received=phones_received,
+                        rating=rating,
+                        total_reviews=total_reviews,
+                        daily_reviews=daily_reviews,
+                        total_items=total_items,
+                        xl_promotion_count=xl_promotion_count,
+                        views=views,
+                        contacts=contacts,
+                        favorites=favorites,
+                        balance_real=balance_real,
+                        balance_bonus=balance_bonus,
+                        advance=advance,
+                        daily_expense=daily_expense
+                    )
+                else:
+                    logger.warning(f"ОТЛАДКА: Нет данных для агрегации дневной статистики")
+                    return None
+        
     except Exception as e:
         logger.error(f"Ошибка при получении статистики за предыдущую неделю: {e}")
         return None
@@ -262,6 +408,14 @@ def daily_report_for_account(chat_id, account_id):
         client_id = account.client_id
         client_secret = account.client_secret
         response = get_daily_statistics(client_id, client_secret)
+        
+        # Сохраняем статистику в базу данных
+        try:
+            today_date = datetime.datetime.strptime(response['date'], '%Y-%m-%d').date()
+            store_account_daily_stats(account, today_date)
+            logger.info(f"Статистика за {today_date} для аккаунта {account.name} сохранена при запросе отчета")
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении статистики для аккаунта {account.name}: {e}")
         
         # Удаляем сообщение о загрузке после получения данных
         bot.delete_message(chat_id, loading_message.message_id)
@@ -306,6 +460,13 @@ def weekly_report_for_account(chat_id, account_id):
         client_id = account.client_id
         client_secret = account.client_secret
         response = get_weekly_statistics(client_id, client_secret)
+        
+        # Сохраняем недельную статистику в базе данных
+        try:
+            store_account_weekly_stats(account)
+            logger.info(f"Недельная статистика для аккаунта {account.name} сохранена в базе данных")
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении недельной статистики для аккаунта {account.name}: {e}")
         
         # Удаляем сообщение о загрузке после получения данных
         bot.delete_message(chat_id, loading_message.message_id)
@@ -442,6 +603,13 @@ def send_weekly_report(telegram_id, account_id):
         client_secret = account.client_secret
         response = get_weekly_statistics(client_id, client_secret)
         
+        # Сохраняем недельную статистику в базу данных после успешного получения данных
+        try:
+            store_account_weekly_stats(account)
+            logger.info(f"Недельная статистика для аккаунта {account.name} сохранена при отправке отчета")
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении недельной статистики для аккаунта {account.name}: {e}")
+        
         # Получаем текущую дату для поиска данных предыдущей недели
         current_date = timezone.now().date()
         
@@ -567,6 +735,14 @@ def send_daily_report(telegram_id, account_id):
         client_id = account.client_id
         client_secret = account.client_secret
         response = get_daily_statistics(client_id, client_secret)
+        
+        # Сохраняем статистику в базу данных после успешного получения данных
+        try:
+            today_date = datetime.datetime.strptime(response['date'], '%Y-%m-%d').date()
+            store_account_daily_stats(account, today_date)
+            logger.info(f"Статистика за {today_date} для аккаунта {account.name} сохранена при отправке отчета")
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении статистики для аккаунта {account.name}: {e}")
         
         # Получаем дату текущего отчета в формате datetime.date
         today_date = datetime.datetime.strptime(response['date'], '%Y-%m-%d').date()
@@ -883,6 +1059,9 @@ def format_daily_report_new(account, response, previous_stats):
     Returns:
         str: Отформатированное сообщение
     """
+    # Добавляем отладочную информацию
+    logger.info(f"ОТЛАДКА: Форматируем отчет для аккаунта {account.name}, previous_stats: {'найдена' if previous_stats else 'НЕ найдена'}")
+    
     # Форматируем дату
     date_obj = datetime.datetime.strptime(response['date'], '%Y-%m-%d').date()
     formatted_date = date_obj.strftime('%d.%m.%Y')
@@ -898,21 +1077,24 @@ def format_daily_report_new(account, response, previous_stats):
     percentage_items = 0
     if previous_stats:
         percentage_items = calculate_percentage_change(total_items, previous_stats.total_items)
-    message_text += f"✔️Объявления: {total_items} шт ({format_simple_percentage(percentage_items)})\n"
+    items_indicator = "❗️" if percentage_items < 0 else "✔️"
+    message_text += f"{items_indicator}Объявления: {total_items} шт ({format_simple_percentage(percentage_items)})\n"
     
     # Просмотры
     views = response['statistics']['views']
     percentage_views = 0
     if previous_stats:
         percentage_views = calculate_percentage_change(views, previous_stats.views)
-    message_text += f"✔️Просмотры: {views} ({format_simple_percentage(percentage_views)})\n"
+    views_indicator = "❗️" if percentage_views < 0 else "✔️"
+    message_text += f"{views_indicator}Просмотры: {views} ({format_simple_percentage(percentage_views)})\n"
     
     # Контакты
     contacts = response['statistics']['contacts']
     percentage_contacts = 0
     if previous_stats:
         percentage_contacts = calculate_percentage_change(contacts, previous_stats.contacts)
-    message_text += f"✔️Контакты: {contacts} ({format_simple_percentage(percentage_contacts)})\n"
+    contacts_indicator = "❗️" if percentage_contacts < 0 else "✔️"
+    message_text += f"{contacts_indicator}Контакты: {contacts} ({format_simple_percentage(percentage_contacts)})\n"
     
     # Конверсия в контакты
     conversion = 0
@@ -922,7 +1104,8 @@ def format_daily_report_new(account, response, previous_stats):
         if previous_stats and previous_stats.views > 0:
             prev_conversion = (previous_stats.contacts / previous_stats.views) * 100
             percentage_conversion = calculate_percentage_change(conversion, prev_conversion)
-    message_text += f"✔️Конверсия в контакты: {conversion:.1f}% ({format_simple_percentage(percentage_conversion)})\n"
+    conversion_indicator = "❗️" if percentage_conversion < 0 else "✔️"
+    message_text += f"{conversion_indicator}Конверсия в контакты: {conversion:.1f}% ({format_simple_percentage(percentage_conversion)})\n"
     
     # Стоимость контакта
     contact_cost = 0
@@ -945,11 +1128,13 @@ def format_daily_report_new(account, response, previous_stats):
         expenses_total = getattr(account, 'daily_expense', 0)
         
     if contacts > 0 and expenses_total > 0:
-        contact_cost = expenses_total / contacts
+        contact_cost = (expenses_total / 100) / contacts  # Конвертируем копейки в рубли
         if previous_stats and previous_stats.contacts > 0 and previous_stats.daily_expense > 0:
             prev_contact_cost = previous_stats.daily_expense / previous_stats.contacts
             percentage_contact_cost = calculate_percentage_change(contact_cost, prev_contact_cost)
-    message_text += f"✔️Стоимость контакта: {contact_cost:.0f} ₽ ({format_simple_percentage(percentage_contact_cost)})\n"
+    # Для стоимости контакта логика обратная: рост стоимости - это плохо
+    cost_indicator = "❗️" if percentage_contact_cost > 0 else "✔️"
+    message_text += f"{cost_indicator}Стоимость контакта: {contact_cost:.0f} ₽ ({format_simple_percentage(percentage_contact_cost)})\n"
     
     # Звонки
     calls = response['calls']['total']
@@ -970,18 +1155,17 @@ def format_daily_report_new(account, response, previous_stats):
     message_text += f"Общие: {response['expenses']['total'] / 100:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
     
     # Расходы на продвижение
-    # Изменил вместо 0
-    promo_expense = response['expenses']['details']['promo']['amount'] / 100
+    promo_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
     percentage_promo = 0
     message_text += f"На продвижение: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     
     # Расходы на XL и выделение
-    xl_expense = response['expenses']['details']['presense']['amount'] / 100
+    xl_expense = response['expenses']['details'].get('promo', {}).get('amount', 0) / 100
     percentage_xl = 0
     message_text += f"На XL и выделение: {xl_expense:,} ₽ ({format_simple_percentage(percentage_xl)})\n".replace(',', ' ')
     
     # Рассылка скидок
-    discount_expense = response['expenses']['details']['sales']['amount']
+    discount_expense = response['expenses']['details'].get('sales', {}).get('amount', 0)
     percentage_discount = 0
     message_text += f"Рассылка скидок: {discount_expense:,} ₽ ({format_simple_percentage(percentage_discount)})\n\n".replace(',', ' ')
     
@@ -998,20 +1182,13 @@ def format_daily_report_new(account, response, previous_stats):
         unanswered_messages = response.get('chats', {}).get('unanswered', 0)
     message_text += f"Сообщения без ответа: {unanswered_messages}\n"
     
-    # Уровень сервиса
-    service_level = 0
-    if calls > 0:
-        answered_calls = calls - missed_calls
-        service_level = (answered_calls / calls) * 100
-    message_text += f"Уровень сервиса: {service_level:.0f}%\n"
-    
     # Новые отзывы
     new_reviews = response['reviews']['today']
     message_text += f"Новые отзывы: {new_reviews}\n\n"
     
     # Балансы
     message_text += f"—————————\n"
-    message_text += f"CPA баланс: {response['balance_real']:,} ₽\n".replace(',', ' ')
+    message_text += f"CPA баланс: {response['cpa_balance']:,} ₽\n".replace(',', ' ')
     
     # Кошелек (сумма реального баланса и бонусов)
     wallet = response['balance_real'] + response['balance_bonus']
@@ -1230,6 +1407,9 @@ def format_weekly_report_new(account, response, previous_stats):
     Returns:
         str: Отформатированное сообщение
     """
+    # Добавляем отладочную информацию
+    logger.info(f"ОТЛАДКА: Форматируем недельный отчет для аккаунта {account.name}, previous_stats: {'найдена' if previous_stats else 'НЕ найдена'}")
+    
     # Начало сообщения с именем аккаунта и периодом
     message_text = f"> {account.name}:\nОтчет за период: {response['period']}\n\n"
     
@@ -1241,21 +1421,24 @@ def format_weekly_report_new(account, response, previous_stats):
     percentage_items = 0
     if previous_stats:
         percentage_items = calculate_percentage_change(total_items, previous_stats.total_items)
-    message_text += f"✔️Объявления: {total_items} шт ({format_simple_percentage(percentage_items)})\n"
+    items_indicator = "❗️" if percentage_items < 0 else "✔️"
+    message_text += f"{items_indicator}Объявления: {total_items} шт ({format_simple_percentage(percentage_items)})\n"
     
     # Просмотры
     views = response['statistics']['views']
     percentage_views = 0
     if previous_stats:
         percentage_views = calculate_percentage_change(views, previous_stats.views)
-    message_text += f"✔️Просмотры: {views} ({format_simple_percentage(percentage_views)})\n"
+    views_indicator = "❗️" if percentage_views < 0 else "✔️"
+    message_text += f"{views_indicator}Просмотры: {views} ({format_simple_percentage(percentage_views)})\n"
     
     # Контакты
     contacts = response['statistics']['contacts']
     percentage_contacts = 0
     if previous_stats:
         percentage_contacts = calculate_percentage_change(contacts, previous_stats.contacts)
-    message_text += f"✔️Контакты: {contacts} ({format_simple_percentage(percentage_contacts)})\n"
+    contacts_indicator = "❗️" if percentage_contacts < 0 else "✔️"
+    message_text += f"{contacts_indicator}Контакты: {contacts} ({format_simple_percentage(percentage_contacts)})\n"
     
     # Конверсия в контакты
     conversion = 0
@@ -1265,7 +1448,8 @@ def format_weekly_report_new(account, response, previous_stats):
         if previous_stats and previous_stats.views > 0:
             prev_conversion = (previous_stats.contacts / previous_stats.views) * 100
             percentage_conversion = calculate_percentage_change(conversion, prev_conversion)
-    message_text += f"✔️Конверсия в контакты: {conversion:.1f}% ({format_simple_percentage(percentage_conversion)})\n"
+    conversion_indicator = "❗️" if percentage_conversion < 0 else "✔️"
+    message_text += f"{conversion_indicator}Конверсия в контакты: {conversion:.1f}% ({format_simple_percentage(percentage_conversion)})\n"
     
     # Стоимость контакта
     contact_cost = 0
@@ -1288,11 +1472,13 @@ def format_weekly_report_new(account, response, previous_stats):
         expenses_total = getattr(account, 'weekly_expense', 0)
         
     if contacts > 0 and expenses_total > 0:
-        contact_cost = expenses_total / contacts
+        contact_cost = (expenses_total / 100) / contacts  # Конвертируем копейки в рубли
         if previous_stats and previous_stats.contacts > 0 and previous_stats.daily_expense > 0:
             prev_contact_cost = previous_stats.daily_expense / previous_stats.contacts
             percentage_contact_cost = calculate_percentage_change(contact_cost, prev_contact_cost)
-    message_text += f"✔️Стоимость контакта: {contact_cost:.0f} ₽ ({format_simple_percentage(percentage_contact_cost)})\n"
+    # Для стоимости контакта логика обратная: рост стоимости - это плохо
+    cost_indicator = "❗️" if percentage_contact_cost > 0 else "✔️"
+    message_text += f"{cost_indicator}Стоимость контакта: {contact_cost:.0f} ₽ ({format_simple_percentage(percentage_contact_cost)})\n"
     
     # Звонки
     calls = response['calls']['total']
@@ -1313,18 +1499,17 @@ def format_weekly_report_new(account, response, previous_stats):
     message_text += f"Общие: {expenses_total / 100:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
     
     # Расходы на продвижение
-    # Изменил вместо 0
-    promo_expense = response['expenses']['details']['promo']['amount'] / 100
+    promo_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
     percentage_promo = 0
     message_text += f"На продвижение: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     
     # Расходы на XL и выделение
-    xl_expense = response['expenses']['details']['presense']['amount'] / 100
+    xl_expense = response['expenses']['details'].get('promo', {}).get('amount', 0) / 100
     percentage_xl = 0
     message_text += f"На XL и выделение: {xl_expense:,} ₽ ({format_simple_percentage(percentage_xl)})\n".replace(',', ' ')
     
     # Рассылка скидок
-    discount_expense = response['expenses']['details']['sales']['amount']
+    discount_expense = response['expenses']['details'].get('sales', {}).get('amount', 0)
     percentage_discount = 0
     message_text += f"Рассылка скидок: {discount_expense:,} ₽ ({format_simple_percentage(percentage_discount)})\n\n".replace(',', ' ')
     
@@ -1341,20 +1526,13 @@ def format_weekly_report_new(account, response, previous_stats):
         unanswered_messages = response.get('chats', {}).get('unanswered', 0)
     message_text += f"Сообщения без ответа: {unanswered_messages}\n"
     
-    # Уровень сервиса
-    service_level = 0
-    if calls > 0:
-        answered_calls = calls - missed_calls
-        service_level = (answered_calls / calls) * 100
-    message_text += f"Уровень сервиса: {service_level:.0f}%\n"
-    
     # Новые отзывы за неделю
     new_reviews = response['reviews']['weekly']
     message_text += f"Новые отзывы: {new_reviews}\n\n"
     
     # Балансы
     message_text += f"—————————\n"
-    message_text += f"CPA баланс: {response['balance_real']:,} ₽\n".replace(',', ' ')
+    message_text += f"CPA баланс: {response['cpa_balance']:,} ₽\n".replace(',', ' ')
     
     # Кошелек (сумма реального баланса и бонусов)
     wallet = response['balance_real'] + response['balance_bonus']

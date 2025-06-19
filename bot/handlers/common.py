@@ -1153,25 +1153,6 @@ def format_daily_report_new(account, response, previous_stats):
     call_indicator = "❗️" if percentage_calls < 0 else "✔️"
     message_text += f"{call_indicator}Всего новых звонков: {calls} ({format_simple_percentage(percentage_calls)})\n\n"
     
-    # Секция "Продвижение объявлений"
-    message_text += f"Продвижение объявлений\n"
-    
-    # XL продвижение
-    xl_promotion_count = response['items']['with_xl_promotion']
-    percentage_xl_promotion = 0
-    if previous_stats:
-        percentage_xl_promotion = calculate_percentage_change(xl_promotion_count, previous_stats.xl_promotion_count)
-    xl_indicator = "✔️" if xl_promotion_count > 0 else "❗️"
-    message_text += f"{xl_indicator}XL продвижение: {xl_promotion_count} объявлений ({format_simple_percentage(percentage_xl_promotion)})\n"
-    
-    # Подписка на инструменты
-    tools_subscription_count = response['items']['with_tools_subscription']
-    percentage_tools = 0
-    if previous_stats:
-        percentage_tools = calculate_percentage_change(tools_subscription_count, previous_stats.tools_subscription_count)
-    tools_indicator = "✔️" if tools_subscription_count > 0 else "❗️"
-    message_text += f"{tools_indicator}Подписка на инструменты: {tools_subscription_count} объявлений ({format_simple_percentage(percentage_tools)})\n\n"
-    
     # Секция "Расходы"
     message_text += f"Расходы\n"
     
@@ -1179,22 +1160,29 @@ def format_daily_report_new(account, response, previous_stats):
     percentage_expenses = 0
     if previous_stats and previous_stats.daily_expense > 0:
         percentage_expenses = calculate_percentage_change(expenses_total, previous_stats.daily_expense)
-    message_text += f"Общие: {response['expenses']['total'] / 100:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
+    message_text += f"Общие: {expenses_total / 100:.1f} ₽ ({format_simple_percentage(percentage_expenses)})\n"
     
-    # Расходы на целевые действия
-    promo_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
+    # Расходы на продвижение (promo)
+    promo_expense = response['expenses']['details'].get('promo', {}).get('amount', 0) / 100
     percentage_promo = 0
-    message_text += f"На целевые действия: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
+    message_text += f"На целевые действия: {promo_expense:.1f} ₽ ({format_simple_percentage(percentage_promo)})\n"
     
-    # Расходы на XL и выделение
-    xl_expense = response['expenses']['details'].get('promo', {}).get('amount', 0) / 100
+    # Расходы на XL и выделение (presence)
+    xl_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
     percentage_xl = 0
-    message_text += f"На XL и выделение: {xl_expense:,} ₽ ({format_simple_percentage(percentage_xl)})\n".replace(',', ' ')
+    message_text += f"На XL и выделение: {xl_expense:.1f} ₽ ({format_simple_percentage(percentage_xl)})\n"
     
     # Рассылка скидок
-    discount_expense = response['expenses']['details'].get('sales', {}).get('amount', 0)
+    discount_expense = response['expenses']['details'].get('sales', {}).get('amount', 0) / 100
     percentage_discount = 0
-    message_text += f"Рассылка скидок: {discount_expense:,} ₽ ({format_simple_percentage(percentage_discount)})\n\n".replace(',', ' ')
+    message_text += f"Рассылка скидок: {discount_expense:.0f} ₽ ({format_simple_percentage(percentage_discount)})\n"
+    
+    # Подписка на инструменты
+    tools_subscription_count = response['items']['with_tools_subscription']
+    percentage_tools = 0
+    if previous_stats:
+        percentage_tools = calculate_percentage_change(tools_subscription_count, previous_stats.tools_subscription_count)
+    message_text += f"Подписка на инструменты: {tools_subscription_count} объявлений ({format_simple_percentage(percentage_tools)})\n\n"
     
     # Работа менеджеров
     message_text += f"Работа менеджеров\n"
@@ -1215,11 +1203,11 @@ def format_daily_report_new(account, response, previous_stats):
     
     # Балансы
     message_text += f"—————————\n"
-    message_text += f"CPA баланс: {response['cpa_balance']:,} ₽\n".replace(',', ' ')
+    message_text += f"CPA баланс: {response['cpa_balance']:.2f} ₽\n"
     
     # Кошелек (сумма реального баланса и бонусов)
     wallet = response['balance_real'] + response['balance_bonus']
-    message_text += f"Кошелек: {wallet:,} ₽".replace(',', ' ')
+    message_text += f"Кошелек: {wallet:.0f} ₽"
     
     return message_text
 
@@ -1522,48 +1510,36 @@ def format_weekly_report_new(account, response, previous_stats):
     call_indicator = "❗️" if percentage_calls < 0 else "✔️"
     message_text += f"{call_indicator}Всего новых звонков: {calls} ({format_simple_percentage(percentage_calls)})\n\n"
     
-    # Секция "Продвижение объявлений" (в недельном отчете)
-    message_text += f"Продвижение объявлений\n"
-    
-    # XL продвижение
-    xl_promotion_count = response['items']['with_xl_promotion']
-    percentage_xl_promotion = 0
-    if previous_stats:
-        percentage_xl_promotion = calculate_percentage_change(xl_promotion_count, previous_stats.xl_promotion_count)
-    xl_indicator = "✔️" if xl_promotion_count > 0 else "❗️"
-    message_text += f"{xl_indicator}XL продвижение: {xl_promotion_count} объявлений ({format_simple_percentage(percentage_xl_promotion)})\n"
-    
-    # Подписка на инструменты
-    tools_subscription_count = response['items']['with_tools_subscription']
-    percentage_tools = 0
-    if previous_stats:
-        percentage_tools = calculate_percentage_change(tools_subscription_count, previous_stats.tools_subscription_count)
-    tools_indicator = "✔️" if tools_subscription_count > 0 else "❗️"
-    message_text += f"{tools_indicator}Подписка на инструменты: {tools_subscription_count} объявлений ({format_simple_percentage(percentage_tools)})\n\n"
-    
-    # Секция "Расходы" (в недельном отчете)
+    # Секция "Расходы"
     message_text += f"Расходы\n"
     
     # Общие расходы
     percentage_expenses = 0
     if previous_stats and previous_stats.daily_expense > 0:
         percentage_expenses = calculate_percentage_change(expenses_total, previous_stats.daily_expense)
-    message_text += f"Общие: {expenses_total / 100:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
+    message_text += f"Общие: {expenses_total / 100:.1f} ₽ ({format_simple_percentage(percentage_expenses)})\n"
     
-    # Расходы на целевые действия
-    promo_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
+    # Расходы на продвижение (promo)
+    promo_expense = response['expenses']['details'].get('promo', {}).get('amount', 0) / 100
     percentage_promo = 0
-    message_text += f"На целевые действия: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
+    message_text += f"На целевые действия: {promo_expense:.1f} ₽ ({format_simple_percentage(percentage_promo)})\n"
     
-    # Расходы на XL и выделение
-    xl_expense = response['expenses']['details'].get('promo', {}).get('amount', 0) / 100
+    # Расходы на XL и выделение (presence)
+    xl_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
     percentage_xl = 0
-    message_text += f"На XL и выделение: {xl_expense:,} ₽ ({format_simple_percentage(percentage_xl)})\n".replace(',', ' ')
+    message_text += f"На XL и выделение: {xl_expense:.1f} ₽ ({format_simple_percentage(percentage_xl)})\n"
     
     # Рассылка скидок
-    discount_expense = response['expenses']['details'].get('sales', {}).get('amount', 0)
+    discount_expense = response['expenses']['details'].get('sales', {}).get('amount', 0) / 100
     percentage_discount = 0
-    message_text += f"Рассылка скидок: {discount_expense:,} ₽ ({format_simple_percentage(percentage_discount)})\n\n".replace(',', ' ')
+    message_text += f"Рассылка скидок: {discount_expense:.0f} ₽ ({format_simple_percentage(percentage_discount)})\n"
+    
+    # Подписка на инструменты
+    tools_subscription_count = response['items']['with_tools_subscription']
+    percentage_tools = 0
+    if previous_stats:
+        percentage_tools = calculate_percentage_change(tools_subscription_count, previous_stats.tools_subscription_count)
+    message_text += f"Подписка на инструменты: {tools_subscription_count} объявлений ({format_simple_percentage(percentage_tools)})\n\n"
     
     # Работа менеджеров
     message_text += f"Работа менеджеров\n"
@@ -1584,10 +1560,10 @@ def format_weekly_report_new(account, response, previous_stats):
     
     # Балансы
     message_text += f"—————————\n"
-    message_text += f"CPA баланс: {response['cpa_balance']:,} ₽\n".replace(',', ' ')
+    message_text += f"CPA баланс: {response['cpa_balance']:.2f} ₽\n"
     
     # Кошелек (сумма реального баланса и бонусов)
     wallet = response['balance_real'] + response['balance_bonus']
-    message_text += f"Кошелек: {wallet:,} ₽".replace(',', ' ')
+    message_text += f"Кошелек: {wallet:.0f} ₽"
     
     return message_text

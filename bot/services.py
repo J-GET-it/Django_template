@@ -1629,8 +1629,8 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
                     "spending": {
                         "total": stats.get('spending', 0) + offers_sum,
                         "ads": stats.get('spending', 0),
-                        "presence": stats.get('presenceSpending', 0),
-                        "promo": stats.get('promoSpending', 0),
+                        "presence": stats.get('promoSpending', 0),
+                        "promo": stats.get('presenceSpending', 0),
                         'sales': offers_sum
                     },
                     "active_items": stats.get('activeItems', 0)

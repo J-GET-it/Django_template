@@ -116,7 +116,7 @@ class AvitoAccountDailyStats(models.Model):
     
     # Основные показатели
     total_calls = models.IntegerField(
-        verbose_name='Всего звонков',
+        verbose_name='Всего новых звонков',
         default=0
     )
     answered_calls = models.IntegerField(
@@ -163,6 +163,10 @@ class AvitoAccountDailyStats(models.Model):
     )
     xl_promotion_count = models.IntegerField(
         verbose_name='Объявления с XL продвижением',
+        default=0
+    )
+    tools_subscription_count = models.IntegerField(
+        verbose_name='Объявления с подпиской на инструменты',
         default=0
     )
     
@@ -232,7 +236,7 @@ class AvitoAccountWeeklyStats(models.Model):
     
     # Основные показатели
     total_calls = models.IntegerField(
-        verbose_name='Всего звонков',
+        verbose_name='Всего новых звонков',
         default=0
     )
     answered_calls = models.IntegerField(
@@ -279,6 +283,10 @@ class AvitoAccountWeeklyStats(models.Model):
     )
     xl_promotion_count = models.IntegerField(
         verbose_name='Объявления с XL продвижением',
+        default=0
+    )
+    tools_subscription_count = models.IntegerField(
+        verbose_name='Объявления с подпиской на инструменты',
         default=0
     )
     

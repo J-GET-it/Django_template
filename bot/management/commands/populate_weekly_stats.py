@@ -82,6 +82,7 @@ class Command(BaseCommand):
                             weekly_reviews=weekly_stats['reviews']['weekly'],
                             total_items=weekly_stats['items']['total'],
                             xl_promotion_count=weekly_stats['items']['with_xl_promotion'],
+                            tools_subscription_count=weekly_stats['items'].get('with_tools_subscription', 0),
                             views=weekly_stats['statistics']['views'],
                             contacts=weekly_stats['statistics']['contacts'],
                             favorites=weekly_stats['statistics']['favorites'],

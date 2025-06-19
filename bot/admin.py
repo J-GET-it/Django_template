@@ -49,7 +49,7 @@ class AvitoAccountWeeklyStatsAdmin(admin.ModelAdmin):
             'fields': ('rating', 'total_reviews', 'weekly_reviews')
         }),
         ('Объявления', {
-            'fields': ('total_items', 'xl_promotion_count')
+            'fields': ('total_items', 'xl_promotion_count', 'tools_subscription_count')
         }),
         ('Статистика', {
             'fields': ('views', 'contacts', 'favorites')

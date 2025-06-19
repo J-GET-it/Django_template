@@ -17,7 +17,7 @@ class WeeklySummary:
     """Класс для хранения суммарной статистики за неделю"""
     def __init__(self, total_calls=0, answered_calls=0, missed_calls=0, total_chats=0, 
                  new_chats=0, phones_received=0, rating=0, total_reviews=0, 
-                 daily_reviews=0, total_items=0, xl_promotion_count=0, 
+                 daily_reviews=0, total_items=0, xl_promotion_count=0, tools_subscription_count=0,
                  views=0, contacts=0, favorites=0, balance_real=0, 
                  balance_bonus=0, advance=0, daily_expense=0):
         self.total_calls = total_calls
@@ -31,6 +31,7 @@ class WeeklySummary:
         self.daily_reviews = daily_reviews
         self.total_items = total_items
         self.xl_promotion_count = xl_promotion_count
+        self.tools_subscription_count = tools_subscription_count
         self.views = views
         self.contacts = contacts
         self.favorites = favorites
@@ -284,6 +285,7 @@ def get_previous_week_stats(account_id, current_date):
                 daily_reviews=previous_week_stats.weekly_reviews,
                 total_items=previous_week_stats.total_items,
                 xl_promotion_count=previous_week_stats.xl_promotion_count,
+                tools_subscription_count=previous_week_stats.tools_subscription_count,
                 views=previous_week_stats.views,
                 contacts=previous_week_stats.contacts,
                 favorites=previous_week_stats.favorites,
@@ -316,6 +318,7 @@ def get_previous_week_stats(account_id, current_date):
                     daily_reviews=any_previous_stats.weekly_reviews,
                     total_items=any_previous_stats.total_items,
                     xl_promotion_count=any_previous_stats.xl_promotion_count,
+                    tools_subscription_count=any_previous_stats.tools_subscription_count,
                     views=any_previous_stats.views,
                     contacts=any_previous_stats.contacts,
                     favorites=any_previous_stats.favorites,
@@ -363,6 +366,7 @@ def get_previous_week_stats(account_id, current_date):
                     daily_reviews = sum(stats.daily_reviews for stats in previous_week_daily_stats)
                     total_items = last_stat.total_items if last_stat else 0
                     xl_promotion_count = last_stat.xl_promotion_count if last_stat else 0
+                    tools_subscription_count = last_stat.tools_subscription_count if last_stat else 0
                     balance_real = last_stat.balance_real if last_stat else 0
                     balance_bonus = last_stat.balance_bonus if last_stat else 0
                     advance = last_stat.advance if last_stat else 0
@@ -382,6 +386,7 @@ def get_previous_week_stats(account_id, current_date):
                         daily_reviews=daily_reviews,
                         total_items=total_items,
                         xl_promotion_count=xl_promotion_count,
+                        tools_subscription_count=tools_subscription_count,
                         views=views,
                         contacts=contacts,
                         favorites=favorites,
@@ -489,7 +494,7 @@ def weekly_report_for_account(chat_id, account_id):
             
             # Звонки
             message_text += f"📞 *Звонки:*\n"
-            message_text += f"   • Всего: {response['calls']['total']}"
+            message_text += f"   • Новых: {response['calls']['total']}\n"
             if previous_week_stats:
                 percentage = calculate_percentage_change(response['calls']['total'], previous_week_stats.total_calls)
                 message_text += f" {format_percentage_change(percentage)}\n"
@@ -540,7 +545,8 @@ def weekly_report_for_account(chat_id, account_id):
             # Объявления
             message_text += f"📝 *Объявления:*\n"
             message_text += f"   • Всего: {response['items']['total']}\n"
-            message_text += f"   • С XL продвижением: {response['items']['with_xl_promotion']}\n\n"
+            message_text += f"   • С XL продвижением: {response['items']['with_xl_promotion']}\n"
+            message_text += f"   • С подпиской на инструменты: {response['items']['with_tools_subscription']}\n\n"
             
             # Статистика просмотров
             message_text += f"👁 *Просмотры:* {response['statistics']['views']}"
@@ -628,7 +634,7 @@ def send_weekly_report(telegram_id, account_id):
         
             # Звонки
             message_text += f"📞 *Звонки:*\n"
-            message_text += f"   • Всего: {response['calls']['total']}"
+            message_text += f"   • Новых: {response['calls']['total']}\n"
             if previous_week_stats:
                 percentage = calculate_percentage_change(response['calls']['total'], previous_week_stats.total_calls)
                 message_text += f" {format_percentage_change(percentage)}\n"
@@ -679,7 +685,8 @@ def send_weekly_report(telegram_id, account_id):
             # Объявления
             message_text += f"📝 *Объявления:*\n"
             message_text += f"   • Всего: {response['items']['total']}\n"
-            message_text += f"   • С XL продвижением: {response['items']['with_xl_promotion']}\n\n"
+            message_text += f"   • С XL продвижением: {response['items']['with_xl_promotion']}\n"
+            message_text += f"   • С подпиской на инструменты: {response['items']['with_tools_subscription']}\n\n"
             
             # Статистика просмотров
             message_text += f"👁 *Просмотры:* {response['statistics']['views']}"
@@ -898,7 +905,8 @@ def get_historical_stats(account_id, days=7):
                     },
                     "items": {
                         "total": stat.total_items,
-                        "with_xl_promotion": stat.xl_promotion_count
+                        "with_xl_promotion": stat.xl_promotion_count,
+                        "with_tools_subscription": stat.tools_subscription_count
                     },
                     "statistics": {
                         "views": stat.views,
@@ -995,7 +1003,7 @@ def format_historical_stats_message(stats_data):
     total = stats_data.get('total', {})
     
     message += f"📞 *Звонки (всего):*\n"
-    message += f"   • Всего: {total.get('calls', {}).get('total', 0)}\n"
+    message += f"   • Новых: {total.get('calls', {}).get('total', 0)}\n"
     message += f"   • Отвечено: {total.get('calls', {}).get('answered', 0)}\n"
     message += f"   • Пропущено: {total.get('calls', {}).get('missed', 0)}\n\n"
     
@@ -1143,7 +1151,26 @@ def format_daily_report_new(account, response, previous_stats):
         percentage_calls = calculate_percentage_change(calls, previous_stats.total_calls)
     # Используем ❗️ если процент отрицательный
     call_indicator = "❗️" if percentage_calls < 0 else "✔️"
-    message_text += f"{call_indicator}Всего звонков: {calls} ({format_simple_percentage(percentage_calls)})\n\n"
+    message_text += f"{call_indicator}Всего новых звонков: {calls} ({format_simple_percentage(percentage_calls)})\n\n"
+    
+    # Секция "Продвижение объявлений"
+    message_text += f"Продвижение объявлений\n"
+    
+    # XL продвижение
+    xl_promotion_count = response['items']['with_xl_promotion']
+    percentage_xl_promotion = 0
+    if previous_stats:
+        percentage_xl_promotion = calculate_percentage_change(xl_promotion_count, previous_stats.xl_promotion_count)
+    xl_indicator = "✔️" if xl_promotion_count > 0 else "❗️"
+    message_text += f"{xl_indicator}XL продвижение: {xl_promotion_count} объявлений ({format_simple_percentage(percentage_xl_promotion)})\n"
+    
+    # Подписка на инструменты
+    tools_subscription_count = response['items']['with_tools_subscription']
+    percentage_tools = 0
+    if previous_stats:
+        percentage_tools = calculate_percentage_change(tools_subscription_count, previous_stats.tools_subscription_count)
+    tools_indicator = "✔️" if tools_subscription_count > 0 else "❗️"
+    message_text += f"{tools_indicator}Подписка на инструменты: {tools_subscription_count} объявлений ({format_simple_percentage(percentage_tools)})\n\n"
     
     # Секция "Расходы"
     message_text += f"Расходы\n"
@@ -1154,10 +1181,10 @@ def format_daily_report_new(account, response, previous_stats):
         percentage_expenses = calculate_percentage_change(expenses_total, previous_stats.daily_expense)
     message_text += f"Общие: {response['expenses']['total'] / 100:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
     
-    # Расходы на продвижение
+    # Расходы на целевые действия
     promo_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
     percentage_promo = 0
-    message_text += f"На продвижение: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
+    message_text += f"На целевые действия: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     
     # Расходы на XL и выделение
     xl_expense = response['expenses']['details'].get('promo', {}).get('amount', 0) / 100
@@ -1304,7 +1331,7 @@ def format_daily_report_standard(account, response, previous_stats):
     
     # Звонки
     message_text += f"📞 *Звонки:*\n"
-    message_text += f"   • Всего: {response['calls']['total']}"
+    message_text += f"   • Новых: {response['calls']['total']}"
     if previous_stats:
         percentage = calculate_percentage_change(response['calls']['total'], previous_stats.total_calls)
         message_text += f" {format_percentage_change(percentage)}\n"
@@ -1355,7 +1382,8 @@ def format_daily_report_standard(account, response, previous_stats):
     # Объявления
     message_text += f"📝 *Объявления:*\n"
     message_text += f"   • Всего: {response['items']['total']}\n"
-    message_text += f"   • С XL продвижением: {response['items']['with_xl_promotion']}\n\n"
+    message_text += f"   • С XL продвижением: {response['items']['with_xl_promotion']}\n"
+    message_text += f"   • С подпиской на инструменты: {response['items']['with_tools_subscription']}\n\n"
     
     # Статистика просмотров
     message_text += f"👁 *Просмотры:* {response['statistics']['views']}"
@@ -1392,6 +1420,11 @@ def format_daily_report_standard(account, response, previous_stats):
     if previous_stats and previous_stats.daily_expense > 0:
         percentage = calculate_percentage_change(account.daily_expense, previous_stats.daily_expense)
         message_text += f"\n*Изменение расходов: {format_percentage_change(percentage)}*"
+    
+    # Расходы на целевые действия
+    promo_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
+    percentage_promo = 0
+    message_text += f"На целевые действия: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     
     return message_text
 
@@ -1480,16 +1513,35 @@ def format_weekly_report_new(account, response, previous_stats):
     cost_indicator = "❗️" if percentage_contact_cost > 0 else "✔️"
     message_text += f"{cost_indicator}Стоимость контакта: {contact_cost:.0f} ₽ ({format_simple_percentage(percentage_contact_cost)})\n"
     
-    # Звонки
+    # Звонки (в недельном отчете)
     calls = response['calls']['total']
     percentage_calls = 0
     if previous_stats:
         percentage_calls = calculate_percentage_change(calls, previous_stats.total_calls)
     # Используем ❗️ если процент отрицательный
     call_indicator = "❗️" if percentage_calls < 0 else "✔️"
-    message_text += f"{call_indicator}Всего звонков: {calls} ({format_simple_percentage(percentage_calls)})\n\n"
+    message_text += f"{call_indicator}Всего новых звонков: {calls} ({format_simple_percentage(percentage_calls)})\n\n"
     
-    # Секция "Расходы"
+    # Секция "Продвижение объявлений" (в недельном отчете)
+    message_text += f"Продвижение объявлений\n"
+    
+    # XL продвижение
+    xl_promotion_count = response['items']['with_xl_promotion']
+    percentage_xl_promotion = 0
+    if previous_stats:
+        percentage_xl_promotion = calculate_percentage_change(xl_promotion_count, previous_stats.xl_promotion_count)
+    xl_indicator = "✔️" if xl_promotion_count > 0 else "❗️"
+    message_text += f"{xl_indicator}XL продвижение: {xl_promotion_count} объявлений ({format_simple_percentage(percentage_xl_promotion)})\n"
+    
+    # Подписка на инструменты
+    tools_subscription_count = response['items']['with_tools_subscription']
+    percentage_tools = 0
+    if previous_stats:
+        percentage_tools = calculate_percentage_change(tools_subscription_count, previous_stats.tools_subscription_count)
+    tools_indicator = "✔️" if tools_subscription_count > 0 else "❗️"
+    message_text += f"{tools_indicator}Подписка на инструменты: {tools_subscription_count} объявлений ({format_simple_percentage(percentage_tools)})\n\n"
+    
+    # Секция "Расходы" (в недельном отчете)
     message_text += f"Расходы\n"
     
     # Общие расходы
@@ -1498,10 +1550,10 @@ def format_weekly_report_new(account, response, previous_stats):
         percentage_expenses = calculate_percentage_change(expenses_total, previous_stats.daily_expense)
     message_text += f"Общие: {expenses_total / 100:,} ₽ ({format_simple_percentage(percentage_expenses)})\n".replace(',', ' ')
     
-    # Расходы на продвижение
+    # Расходы на целевые действия
     promo_expense = response['expenses']['details'].get('presence', {}).get('amount', 0) / 100
     percentage_promo = 0
-    message_text += f"На продвижение: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
+    message_text += f"На целевые действия: {promo_expense:,} ₽ ({format_simple_percentage(percentage_promo)})\n".replace(',', ' ')
     
     # Расходы на XL и выделение
     xl_expense = response['expenses']['details'].get('promo', {}).get('amount', 0) / 100

@@ -20,66 +20,91 @@ def get_access_token(client_id, client_secret):
     access_token = auth_result.get('access_token')
     return access_token
 
-def get_user_calls(access_token, date_from=None, date_to=None):
-    """Получение списка звонков за указанный период"""
+def get_user_calls_stats(access_token, user_id, date_from=None, date_to=None, item_ids=None):
+    """Получение статистики звонков через правильный API эндпоинт"""
     try:
         if date_from is None or date_to is None:
             current_time = datetime.datetime.now()
-            date_from = (current_time - datetime.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            date_to = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            date_from = (current_time - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
+            date_to = current_time.strftime("%Y-%m-%d")
+        else:
+            # Конвертируем из ISO формата в формат YYYY-MM-DD если нужно
+            if 'T' in str(date_from):
+                date_from = datetime.datetime.fromisoformat(date_from.replace('Z', '+00:00')).strftime("%Y-%m-%d")
+            if 'T' in str(date_to):
+                date_to = datetime.datetime.fromisoformat(date_to.replace('Z', '+00:00')).strftime("%Y-%m-%d")
 
-        calls_url = 'https://api.avito.ru/calltracking/v1/getCalls/'
+        calls_stats_url = f'https://api.avito.ru/core/v1/accounts/{user_id}/calls/stats/'
         calls_data = {
-            'dateTimeFrom': date_from,
-            'dateTimeTo': date_to,
-            'limit': 100,
-            'offset': 0
+            'dateFrom': date_from,
+            'dateTo': date_to
         }
+        
+        # Добавляем ID объявлений если они переданы
+        if item_ids:
+            calls_data['itemIds'] = item_ids[:100]  # Ограничиваем количество
+
         headers = {
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json'
         }
 
-        logger.info(f"Запрос звонков с {date_from} по {date_to}")
+        logger.info(f"Запрос статистики звонков с {date_from} по {date_to}")
         
-        calls_response = requests.post(calls_url, headers=headers, json=calls_data)
+        calls_response = requests.post(calls_stats_url, headers=headers, json=calls_data)
         calls_response.raise_for_status()
         
         # Проверяем, что ответ не пустой
         if not calls_response.text.strip():
-            logger.warning("Получен пустой ответ от API звонков")
-            return {"calls": []}
+            logger.warning("Получен пустой ответ от API статистики звонков")
+            return {"result": {"items": []}}
         
         try:
             calls_result = calls_response.json()
-            logger.info(f"Получено {len(calls_result.get('calls', []))} звонков")
+            logger.info(f"Получена статистика звонков для {len(calls_result.get('result', {}).get('items', []))} объявлений")
             return calls_result
         except json.JSONDecodeError as e:
             logger.error(f"Ошибка декодирования JSON: {e}, содержимое ответа: {calls_response.text[:200]}")
-            return {"calls": []}
+            return {"result": {"items": []}}
             
     except requests.exceptions.RequestException as e:
-        logger.error(f"Ошибка запроса к API звонков: {e}")
-        return {"calls": []}
+        logger.error(f"Ошибка запроса к API статистики звонков: {e}")
+        return {"result": {"items": []}}
     except Exception as e:
-        logger.error(f"Непредвиденная ошибка при получении звонков: {e}")
-        return {"calls": []}
-
+        logger.error(f"Непредвиденная ошибка при получении статистики звонков: {e}")
+        return {"result": {"items": []}}
 
 def get_total_calls(access_token, date_from=None, date_to=None):
-    """Подсчет общего количества звонков за период"""
+    """Подсчет общего количества новых звонков за период"""
     try:
-        calls_result = get_user_calls(access_token, date_from, date_to)
-        total_calls = len(calls_result.get('calls', []))
-        logger.info(f"Общее количество звонков: {total_calls}")
-        return total_calls
+        # Получаем user_id
+        user_info = get_user_info(access_token)
+        user_id = user_info.get('id')
+        
+        if not user_id:
+            logger.error("Не удалось получить идентификатор пользователя для статистики звонков")
+            return 0
+        
+        # Получаем статистику звонков
+        calls_stats = get_user_calls_stats(access_token, user_id, date_from, date_to)
+        
+        total_new_calls = 0
+        
+        # Суммируем новые звонки по всем объявлениям и дням
+        for item in calls_stats.get('result', {}).get('items', []):
+            for day in item.get('days', []):
+                total_new_calls += day.get('new', 0)
+        
+        logger.info(f"Общее количество новых звонков: {total_new_calls}")
+        return total_new_calls
     except Exception as e:
-        logger.error(f"Ошибка при подсчете общего количества звонков: {e}")
+        logger.error(f"Ошибка при подсчете общего количества новых звонков: {e}")
         return 0
 
 def get_missed_calls(access_token, date_from=None, date_to=None):
     """Подсчет пропущенных звонков за период"""
     try:
+        # Используем старый API для получения пропущенных звонков
         calls_result = get_user_calls(access_token, date_from, date_to)
         missed_calls = sum(1 for call in calls_result.get('calls', []) if call.get('talkDuration', 0) == 0)
         logger.info(f"Количество пропущенных звонков: {missed_calls}")
@@ -454,15 +479,16 @@ def get_item_promotion_info(access_token, user_id, item_ids):
     try:
         if not item_ids:
             logger.info("Нет объявлений для анализа продвижения")
-            return {"total_items": 0, "xl_promotion_count": 0}
+            return {"total_items": 0, "xl_promotion_count": 0, "tools_subscription_count": 0}
     
-        # Подсчет объявлений с XL продвижением
+        # Подсчет объявлений с XL продвижением и другими услугами
         xl_promotion_count = 0
+        tools_subscription_count = 0
         
         # Ограничиваем количество проверяемых объявлений
         check_ids = item_ids[:50]  # Проверяем не более 50 объявлений
         
-        # Получаем детальную информацию о каждом объявлении для проверки XL продвижения
+        # Получаем детальную информацию о каждом объявлении для проверки продвижений
         for item_id in check_ids:
             try:
                 item_info_url = f'https://api.avito.ru/core/v1/accounts/{user_id}/items/{item_id}/'
@@ -479,12 +505,23 @@ def get_item_promotion_info(access_token, user_id, item_ids):
                     
                 item_data = item_response.json()
                 
-                # Проверка наличия XL продвижения
+                # Проверка наличия XL продвижения и других услуг
                 services = item_data.get('services', [])
+                has_xl = False
+                has_tools_subscription = False
+                
                 for service in services:
-                    if service.get('code') == 'xl':
-                        xl_promotion_count += 1
-                        break
+                    service_code = service.get('code')
+                    if service_code == 'xl':
+                        has_xl = True
+                    elif service_code in ['vip', 'highlight', 'pushup', 'premium']:
+                        has_tools_subscription = True
+                
+                # Подсчитываем объявления
+                if has_xl:
+                    xl_promotion_count += 1
+                if has_tools_subscription:
+                    tools_subscription_count += 1
                         
             except Exception as e:
                 logger.error(f"Ошибка при получении информации о продвижении объявления {item_id}: {e}")
@@ -494,21 +531,24 @@ def get_item_promotion_info(access_token, user_id, item_ids):
         if len(check_ids) < len(item_ids):
             ratio = len(item_ids) / len(check_ids)
             xl_promotion_count = int(xl_promotion_count * ratio)
+            tools_subscription_count = int(tools_subscription_count * ratio)
             logger.info(f"Экстраполяция данных по продвижению: проверено {len(check_ids)} из {len(item_ids)} объявлений")
         
         result = {
             "total_items": len(item_ids),
-            "xl_promotion_count": xl_promotion_count
+            "xl_promotion_count": xl_promotion_count,
+            "tools_subscription_count": tools_subscription_count
         }
         
-        logger.info(f"Информация о продвижениях: всего {len(item_ids)} объявлений, с XL продвижением: {xl_promotion_count}")
+        logger.info(f"Информация о продвижениях: всего {len(item_ids)} объявлений, с XL продвижением: {xl_promotion_count}, с подпиской на инструменты: {tools_subscription_count}")
         return result
         
     except Exception as e:
         logger.error(f"Ошибка при получении информации о продвижении объявлений: {e}")
         return {
             "total_items": len(item_ids) if item_ids else 0,
-            "xl_promotion_count": 0
+            "xl_promotion_count": 0,
+            "tools_subscription_count": 0
         }
 
 def get_items_statistics(access_token, user_id, item_ids, date_from=None, date_to=None, period_grouping="day"):
@@ -786,7 +826,7 @@ def get_daily_statistics(client_id, client_secret):
         total_phones = 0
         rating = 0
         reviews_info = {"total_reviews": 0, "period_reviews": 0}
-        promotion_info = {"total_items": 0, "xl_promotion_count": 0}
+        promotion_info = {"total_items": 0, "xl_promotion_count": 0, "tools_subscription_count": 0}
         items_stats = {"total_views": 0, "total_contacts": 0, "total_favorites": 0}
         
         # Создаем ключ для кэша статистики
@@ -977,7 +1017,8 @@ def get_daily_statistics(client_id, client_secret):
             },
             "items": {
                 "total": promotion_info["total_items"],
-                "with_xl_promotion": promotion_info["xl_promotion_count"]
+                "with_xl_promotion": promotion_info["xl_promotion_count"],
+                "with_tools_subscription": promotion_info["tools_subscription_count"]
             },
             "statistics": {
                 "views": items_stats["total_views"],
@@ -1010,24 +1051,36 @@ def get_daily_statistics(client_id, client_secret):
             "phones_received": 0,
             "rating": 0,
             "reviews": {"total": 0, "today": 0},
-            "items": {"total": 0, "with_xl_promotion": 0},
+            "items": {"total": 0, "with_xl_promotion": 0, "with_tools_subscription": 0},
             "statistics": {"views": 0, "contacts": 0, "favorites": 0}
         }
 
 
 def get_weekly_statistics(client_id, client_secret):
     try:
-        # Получаем текущую дату и дату неделю назад
+        # Получаем текущую дату
         current_time = datetime.datetime.now()
-        week_ago = current_time - datetime.timedelta(days=7)
-        week_start = week_ago.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
-        week_end = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        
+        # Определяем прошлую неделю (понедельник-воскресенье)
+        # Сначала находим понедельник текущей недели
+        days_since_monday = current_time.weekday()  # 0 = понедельник, 6 = воскресенье
+        current_monday = current_time - datetime.timedelta(days=days_since_monday)
+        
+        # Прошлый понедельник (начало прошлой недели)
+        last_monday = current_monday - datetime.timedelta(weeks=1)
+        
+        # Прошлое воскресенье (конец прошлой недели)
+        last_sunday = last_monday + datetime.timedelta(days=6)
+        
+        # Форматируем даты для API
+        week_start = last_monday.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+        week_end = last_sunday.replace(hour=23, minute=59, second=59, microsecond=999999).strftime("%Y-%m-%dT%H:%M:%SZ")
         
         # Форматы дат для разных API
-        week_start_date = week_ago.strftime("%Y-%m-%d")
-        week_end_date = current_time.strftime("%Y-%m-%d")
+        week_start_date = last_monday.strftime("%Y-%m-%d")
+        week_end_date = last_sunday.strftime("%Y-%m-%d")
         
-        logger.info(f"Запрос недельной статистики с {week_start_date} по {week_end_date}")
+        logger.info(f"Запрос недельной статистики за прошлую неделю с {week_start_date} по {week_end_date}")
         
         # Создаем ключ для кэша статистики
         stats_cache_key = f"weekly_stats_{week_start_date}_{week_end_date}"
@@ -1063,7 +1116,7 @@ def get_weekly_statistics(client_id, client_secret):
         total_phones = 0
         rating = 0
         reviews_info = {"total_reviews": 0, "period_reviews": 0}
-        promotion_info = {"total_items": 0, "xl_promotion_count": 0}
+        promotion_info = {"total_items": 0, "xl_promotion_count": 0, "tools_subscription_count": 0}
         items_stats = {"total_views": 0, "total_contacts": 0, "total_favorites": 0}
         
         # Пытаемся получить расширенную статистику профиля, только если не было ошибок ранее
@@ -1205,9 +1258,9 @@ def get_weekly_statistics(client_id, client_secret):
         except Exception as e:
             logger.error(f"Ошибка при получении информации о рейтинге и отзывах: {e}")
         
-        # Формируем и возвращаем полную статистику за неделю
+        # Формируем и возвращаем полную статистику за прошлую неделю
         result = {
-            "period": f"{week_ago.strftime('%Y-%m-%d')} - {current_time.strftime('%Y-%m-%d')}",
+            "period": f"{last_monday.strftime('%Y-%m-%d')} - {last_sunday.strftime('%Y-%m-%d')}",
             "calls": {
                 "total": total_calls,
                 "missed": missed_calls,
@@ -1230,7 +1283,8 @@ def get_weekly_statistics(client_id, client_secret):
             },
             "items": {
                 "total": promotion_info["total_items"],
-                "with_xl_promotion": promotion_info["xl_promotion_count"]
+                "with_xl_promotion": promotion_info["xl_promotion_count"],
+                "with_tools_subscription": promotion_info["tools_subscription_count"]
             },
             "statistics": {
                 "views": items_stats["total_views"],
@@ -1244,14 +1298,20 @@ def get_weekly_statistics(client_id, client_secret):
             get_weekly_statistics._stats_cache = {}
         get_weekly_statistics._stats_cache[stats_cache_key] = (result, current_time)
         
-        logger.info(f"Недельная статистика успешно получена")
+        logger.info(f"Недельная статистика за прошлую неделю успешно получена")
         return result
         
     except Exception as e:
         logger.error(f"Ошибка при получении недельной статистики: {e}")
         # Возвращаем структуру с нулевыми значениями в случае ошибки
+        current_time = datetime.datetime.now()
+        days_since_monday = current_time.weekday()
+        current_monday = current_time - datetime.timedelta(days=days_since_monday)
+        last_monday = current_monday - datetime.timedelta(weeks=1)
+        last_sunday = last_monday + datetime.timedelta(days=6)
+        
         return {
-            "period": f"{week_ago.strftime('%Y-%m-%d')} - {current_time.strftime('%Y-%m-%d')}",
+            "period": f"{last_monday.strftime('%Y-%m-%d')} - {last_sunday.strftime('%Y-%m-%d')}",
             "calls": {"total": 0, "missed": 0, "answered": 0},
             "balance_real": 0,
             "balance_bonus": 0,
@@ -1262,7 +1322,7 @@ def get_weekly_statistics(client_id, client_secret):
             "phones_received": 0,
             "rating": 0,
             "reviews": {"total": 0, "weekly": 0},
-            "items": {"total": 0, "with_xl_promotion": 0},
+            "items": {"total": 0, "with_xl_promotion": 0, "with_tools_subscription": 0},
             "statistics": {"views": 0, "contacts": 0, "favorites": 0}
         }
 
@@ -1502,7 +1562,7 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
             "allSpending",        # Все расходы
             "spending",           # Расходы на объявления
             "presenceSpending",   # Расходы на размещение
-            "promoSpending",      # Расходы на продвижение
+            "promoSpending",      # Расходы на целевые действия
             "activeItems"         # Активные объявления
         ]
         
@@ -1742,3 +1802,48 @@ def get_cpa_balance(access_token):
     except Exception as e:
         logger.error(f"Ошибка при получении CPA баланса: {e}")
         return 0
+
+def get_user_calls(access_token, date_from=None, date_to=None):
+    """Получение списка звонков за указанный период (старый API для обратной совместимости)"""
+    try:
+        if date_from is None or date_to is None:
+            current_time = datetime.datetime.now()
+            date_from = (current_time - datetime.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            date_to = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        calls_url = 'https://api.avito.ru/calltracking/v1/getCalls/'
+        calls_data = {
+            'dateTimeFrom': date_from,
+            'dateTimeTo': date_to,
+            'limit': 100,
+            'offset': 0
+        }
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+
+        logger.info(f"Запрос звонков с {date_from} по {date_to}")
+        
+        calls_response = requests.post(calls_url, headers=headers, json=calls_data)
+        calls_response.raise_for_status()
+        
+        # Проверяем, что ответ не пустой
+        if not calls_response.text.strip():
+            logger.warning("Получен пустой ответ от API звонков")
+            return {"calls": []}
+        
+        try:
+            calls_result = calls_response.json()
+            logger.info(f"Получено {len(calls_result.get('calls', []))} звонков")
+            return calls_result
+        except json.JSONDecodeError as e:
+            logger.error(f"Ошибка декодирования JSON: {e}, содержимое ответа: {calls_response.text[:200]}")
+            return {"calls": []}
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка запроса к API звонков: {e}")
+        return {"calls": []}
+    except Exception as e:
+        logger.error(f"Непредвиденная ошибка при получении звонков: {e}")
+        return {"calls": []}

@@ -1082,19 +1082,6 @@ def get_weekly_statistics(client_id, client_secret):
         
         logger.info(f"Запрос недельной статистики за прошлую неделю с {week_start_date} по {week_end_date}")
         
-        # Создаем ключ для кэша статистики
-        stats_cache_key = f"weekly_stats_{week_start_date}_{week_end_date}"
-        
-        # Проверяем, есть ли у нас кэшированные данные
-        if hasattr(get_weekly_statistics, '_stats_cache') and stats_cache_key in get_weekly_statistics._stats_cache:
-            cache_data, cache_time = get_weekly_statistics._stats_cache[stats_cache_key]
-            time_diff = (current_time - cache_time).total_seconds() / 60  # Разница в минутах
-            
-            # Используем кэш, если он не старше 60 минут
-            if time_diff < 60:
-                logger.info(f"Использование кэшированной недельной статистики ({time_diff:.1f} минут)")
-                return cache_data
-        
         # Получаем токен доступа
         access_token = get_access_token(client_id, client_secret)
         if not access_token:
@@ -1105,6 +1092,19 @@ def get_weekly_statistics(client_id, client_secret):
         if not user_id:
             logger.error("Не удалось получить ID пользователя")
             raise Exception("Не удалось получить ID пользователя")
+        
+        # Создаем ключ для кэша статистики с учетом user_id
+        stats_cache_key = f"weekly_stats_{user_id}_{week_start_date}_{week_end_date}"
+        
+        # Проверяем, есть ли у нас кэшированные данные
+        if hasattr(get_weekly_statistics, '_stats_cache') and stats_cache_key in get_weekly_statistics._stats_cache:
+            cache_data, cache_time = get_weekly_statistics._stats_cache[stats_cache_key]
+            time_diff = (current_time - cache_time).total_seconds() / 60  # Разница в минутах
+            
+            # Используем кэш, если он не старше 60 минут
+            if time_diff < 60:
+                logger.info(f"Использование кэшированной недельной статистики ({time_diff:.1f} минут)")
+                return cache_data
         
         # Инициализируем значения по умолчанию
         total_calls = 0

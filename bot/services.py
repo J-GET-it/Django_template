@@ -101,13 +101,47 @@ def get_total_calls(access_token, date_from=None, date_to=None):
         logger.error(f"Ошибка при подсчете общего количества новых звонков: {e}")
         return 0
 
-def get_missed_calls(access_token, date_from=None, date_to=None):
-    """Подсчет пропущенных звонков за период"""
+def get_total_answered_calls(access_token, date_from=None, date_to=None):
+    """Подсчет общего количества отвеченных звонков за период"""
     try:
-        # Используем старый API для получения пропущенных звонков
-        calls_result = get_user_calls(access_token, date_from, date_to)
-        missed_calls = sum(1 for call in calls_result.get('calls', []) if call.get('talkDuration', 0) == 0)
-        logger.info(f"Количество пропущенных звонков: {missed_calls}")
+        # Получаем user_id
+        user_info = get_user_info(access_token)
+        user_id = user_info.get('id')
+        
+        if not user_id:
+            logger.error("Не удалось получить идентификатор пользователя для статистики звонков")
+            return 0
+        
+        # Получаем статистику звонков
+        calls_stats = get_user_calls_stats(access_token, user_id, date_from, date_to)
+        
+        total_answered_calls = 0
+        
+        # Суммируем отвеченные звонки по всем объявлениям и дням
+        for item in calls_stats.get('result', {}).get('items', []):
+            for day in item.get('days', []):
+                total_answered_calls += day.get('answered', 0)
+        
+        logger.info(f"Общее количество отвеченных звонков: {total_answered_calls}")
+        return total_answered_calls
+    except Exception as e:
+        logger.error(f"Ошибка при подсчете общего количества отвеченных звонков: {e}")
+        return 0
+
+def get_missed_calls(access_token, date_from=None, date_to=None):
+    """Подсчет пропущенных звонков за период (новые - отвеченные)"""
+    try:
+        # Получаем новые и отвеченные звонки через правильный API
+        new_calls = get_total_calls(access_token, date_from, date_to)
+        answered_calls = get_total_answered_calls(access_token, date_from, date_to)
+        
+        # Пропущенные = новые - отвеченные
+        missed_calls = new_calls - answered_calls
+        
+        # Убеждаемся, что пропущенные звонки не могут быть отрицательными
+        missed_calls = max(0, missed_calls)
+        
+        logger.info(f"Количество пропущенных звонков: {missed_calls} (новых: {new_calls}, отвеченных: {answered_calls})")
         return missed_calls
     except Exception as e:
         logger.error(f"Ошибка при подсчете пропущенных звонков: {e}")
@@ -817,7 +851,8 @@ def get_daily_statistics(client_id, client_secret):
             raise Exception("Не удалось получить ID пользователя")
         
         # Инициализируем значения по умолчанию
-        total_calls = 0
+        new_calls = 0
+        answered_calls = 0
         missed_calls = 0
         balance_info = {"balance_real": 0, "balance_bonus": 0, "advance": 0}
         expenses_info = {"total": 0, "details": {}}
@@ -860,8 +895,7 @@ def get_daily_statistics(client_id, client_secret):
         
         # Если статистика успешно получена, используем ее
         if not profile_stats is None:
-            # Используем статистику профиля для звонков и чатов
-            total_calls = profile_stats.get('calls', 0)
+            # Используем статистику профиля для чатов (звонки получим отдельно)
             total_chats = profile_stats.get('chats', 0)
             
             # Обновляем статистику объявлений
@@ -924,13 +958,6 @@ def get_daily_statistics(client_id, client_secret):
             
             # Если расширенная статистика недоступна, используем старые методы
             try:
-                # Получаем статистику звонков за вчерашний день
-                total_calls = get_total_calls(access_token, yesterday_start, yesterday_end)
-                missed_calls = get_missed_calls(access_token, yesterday_start, yesterday_end)
-            except Exception as e:
-                logger.error(f"Ошибка при получении статистики звонков: {e}")
-            
-            try:
                 # Получаем чаты за вчерашний день
                 total_chats = get_user_chats(access_token, yesterday_start, yesterday_end)
             except Exception as e:
@@ -957,13 +984,13 @@ def get_daily_statistics(client_id, client_secret):
             except Exception as e:
                 logger.error(f"Ошибка при получении информации о расходах: {e}")
         
-        # Дополняем данные, которые нельзя получить из расширенной статистики
+        # Получаем статистику звонков всегда отдельно через правильный API
         try:
-            # Если статистика профиля не вернула пропущенные звонки, получаем их отдельно
-            if missed_calls == 0 and total_calls > 0:
-                missed_calls = get_missed_calls(access_token, yesterday_start, yesterday_end)
+            new_calls = get_total_calls(access_token, yesterday_start, yesterday_end)
+            answered_calls = get_total_answered_calls(access_token, yesterday_start, yesterday_end)
+            missed_calls = max(0, new_calls - answered_calls)
         except Exception as e:
-            logger.error(f"Ошибка при получении информации о пропущенных звонках: {e}")
+            logger.error(f"Ошибка при получении статистики звонков: {e}")
             
         try:
             # Получаем новые чаты за период (функция использует фильтрацию по дате)
@@ -996,9 +1023,9 @@ def get_daily_statistics(client_id, client_secret):
         result = {
             "date": yesterday_date,
             "calls": {
-                "total": total_calls,
+                "total": new_calls,  # Общее количество = новые звонки
                 "missed": missed_calls,
-                "answered": total_calls - missed_calls
+                "answered": answered_calls
             },
             "balance_real": balance_info["balance_real"],
             "balance_bonus": balance_info["balance_bonus"],
@@ -1107,7 +1134,8 @@ def get_weekly_statistics(client_id, client_secret):
                 return cache_data
         
         # Инициализируем значения по умолчанию
-        total_calls = 0
+        new_calls = 0
+        answered_calls = 0
         missed_calls = 0
         balance_info = {"balance_real": 0, "balance_bonus": 0, "advance": 0}
         expenses_info = {"total": 0, "details": {}}
@@ -1134,8 +1162,7 @@ def get_weekly_statistics(client_id, client_secret):
             profile_stats = get_profile_statistics(access_token, user_id, date_from=week_start_date, date_to=week_end_date)
         # Если статистика успешно получена, используем ее
         if not profile_stats is None:
-            # Используем статистику профиля для звонков и чатов
-            total_calls = profile_stats.get('calls', 0)
+            # Используем статистику профиля для чатов (звонки получим отдельно)
             total_chats = profile_stats.get('chats', 0)
             
             # Обновляем статистику объявлений
@@ -1183,13 +1210,6 @@ def get_weekly_statistics(client_id, client_secret):
         else:
             # Если расширенная статистика недоступна, используем старые методы
             try:
-                # Получаем статистику звонков
-                total_calls = get_total_calls(access_token, week_start, week_end)
-                missed_calls = get_missed_calls(access_token, week_start, week_end)
-            except Exception as e:
-                logger.error(f"Ошибка при получении статистики звонков: {e}")
-                
-            try:
                 # Получаем чаты
                 total_chats = get_user_chats(access_token, week_start, week_end)
             except Exception as e:
@@ -1223,13 +1243,13 @@ def get_weekly_statistics(client_id, client_secret):
             # except Exception as e:
             #     logger.error(f"Ошибка при получении информации о расходах: {e}")
         
-        # Дополняем данные, которые нельзя получить из расширенной статистики
+        # Получаем статистику звонков всегда отдельно через правильный API
         try:
-            # Если статистика профиля не вернула пропущенные звонки, получаем их отдельно
-            if missed_calls == 0 and total_calls > 0:
-                missed_calls = get_missed_calls(access_token, week_start, week_end)
+            new_calls = get_total_calls(access_token, week_start, week_end)
+            answered_calls = get_total_answered_calls(access_token, week_start, week_end)
+            missed_calls = max(0, new_calls - answered_calls)
         except Exception as e:
-            logger.error(f"Ошибка при получении информации о пропущенных звонках: {e}")
+            logger.error(f"Ошибка при получении статистики звонков: {e}")
             
         try:
             # Получаем новые чаты за период
@@ -1262,9 +1282,9 @@ def get_weekly_statistics(client_id, client_secret):
         result = {
             "period": f"{last_monday.strftime('%Y-%m-%d')} - {last_sunday.strftime('%Y-%m-%d')}",
             "calls": {
-                "total": total_calls,
+                "total": new_calls,  # Общее количество = новые звонки
                 "missed": missed_calls,
-                "answered": total_calls - missed_calls
+                "answered": answered_calls
             },
             "balance_real": balance_info["balance_real"],
             "balance_bonus": balance_info["balance_bonus"],
@@ -1613,14 +1633,12 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
                 stats = {metric.get('slug'): metric.get('value', 0) for metric in metrics_data}
                 
                 # Добавляем расчетные показатели
-                calls = stats.get('contactsShowPhone', 0)
                 chats = stats.get('contactsMessenger', 0)
                 
                 # Формируем результат с основными и дополнительными показателями
                 result_dict = {
                     "views": stats.get('views', 0),
                     "contacts": stats.get('contacts', 0),
-                    "calls": calls,
                     "chats": chats,
                     "favorites": stats.get('favorites', 0),
                     "impressions": stats.get('impressions', 0),
@@ -1635,7 +1653,7 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
                     },
                     "active_items": stats.get('activeItems', 0)
                 }
-                logger.info(f"Получена статистика: просмотры: {result_dict['views']}, контакты: {result_dict['contacts']}, звонки: {result_dict['calls']}, чаты: {result_dict['chats']}")
+                logger.info(f"Получена статистика: просмотры: {result_dict['views']}, контакты: {result_dict['contacts']}, чаты: {result_dict['chats']}")
                 
                 # Сохраняем результат в кэш
                 get_profile_statistics._stats_cache[cache_key] = (result_dict, current_time)

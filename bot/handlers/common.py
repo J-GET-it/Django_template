@@ -899,6 +899,8 @@ def format_daily_report_new(account, response, previous_stats):
     if previous_stats:
         percentage_items = calculate_percentage_change(total_items, previous_stats.total_items)
     message_text += f"✔️Объявления: {total_items} шт ({format_simple_percentage(percentage_items)})\n"
+    message_text += f"✔️Показы: {response['statistics'].get("impressions", 0)}\n"
+    message_text += f"✔️Конверсия из показов в просмотры: {response['statistics'].get("impressionsToViewsConversion", 0) / 100}%\n"
     
     # Просмотры
     views = response['statistics']['views']
@@ -1242,6 +1244,8 @@ def format_weekly_report_new(account, response, previous_stats):
     if previous_stats:
         percentage_items = calculate_percentage_change(total_items, previous_stats.total_items)
     message_text += f"✔️Объявления: {total_items} шт ({format_simple_percentage(percentage_items)})\n"
+    message_text += f"✔️Показы: {response['statistics'].get("impressions", 0)}\n"
+    message_text += f"✔️Конверсия из показов в просмотры: {response['statistics'].get("impressionsToViewsConversion", 0) / 100}%\n"
     
     # Просмотры
     views = response['statistics']['views']

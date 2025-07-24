@@ -960,6 +960,8 @@ def get_daily_statistics(client_id, client_secret):
             },
             "statistics": {
                 "views": items_stats["total_views"],
+                "impressions": profile_stats.get("impressions", 0),
+                "impressionsToViewsConversion": profile_stats.get("impressionsToViewsConversion", 0),
                 "contacts": items_stats["total_contacts"],
                 "favorites": items_stats["total_favorites"]
             }
@@ -1191,6 +1193,8 @@ def get_weekly_statistics(client_id, client_secret):
             },
             "statistics": {
                 "views": items_stats["total_views"],
+                "impressions": profile_stats.get("impressions", 0),
+                "impressionsToViewsConversion": profile_stats.get("impressionsToViewsConversion", 0),
                 "contacts": items_stats["total_contacts"],
                 "favorites": items_stats["total_favorites"]
             }
@@ -1582,17 +1586,19 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
         
         # Набор всех нужных метрик
         metrics = [
-            "views",              # Просмотры
-            "contacts",           # Контакты (общее)
-            "contactsShowPhone",  # Посмотрели телефон
-            "contactsMessenger",  # Написали в чат
-            "favorites",          # В избранном
-            "impressions",        # Показы
-            "allSpending",        # Все расходы
-            "spending",           # Расходы на объявления
-            "presenceSpending",   # Расходы на размещение
-            "promoSpending",      # Расходы на продвижение
-            "activeItems"         # Активные объявления
+            "views",                         # Просмотры
+            "contacts",                      # Контакты (общее)
+            "contactsShowPhone",             # Посмотрели телефон
+            "contactsMessenger",             # Написали в чат
+            "favorites",                     # В избранном
+            "impressions",                   # Показы
+            "allSpending",                   # Все расходы
+            "spending",                      # Расходы на объявления
+            "presenceSpending",              # Расходы на размещение
+            "promoSpending",                 # Расходы на продвижение
+            "activeItems",                   # Активные объявления       
+            "impressions",                   # Показы
+            "impressionsToViewsConversion"   # Конверсия
         ]
         
         # Данные запроса
@@ -1653,6 +1659,7 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
                     "chats": chats,
                     "favorites": stats.get('favorites', 0),
                     "impressions": stats.get('impressions', 0),
+                    "impressionsToViewsConversion": stats.get('impressionsToViewsConversion', 0),
                     
                     # Почему-то для рекламы ('ads') берётся метрика 'spending', которая является суммой всех остальных расходов
                     "spending": {
@@ -1662,7 +1669,7 @@ def get_profile_statistics(access_token, user_id, date_from=None, date_to=None, 
                         "promo": stats.get('promoSpending', 0),
                         'sales': offers_sum
                     },
-                    "active_items": stats.get('activeItems', 0)
+                    "active_items": stats.get('activeItems', 0),
                 }
                 logger.info(f"Получена статистика: просмотры: {result_dict['views']}, контакты: {result_dict['contacts']}, звонки: {result_dict['calls']}, чаты: {result_dict['chats']}")
                 

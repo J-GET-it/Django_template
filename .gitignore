@@ -142,3 +142,5 @@ dmypy.json
 *.png
 
 .bot/migrations/
+bot/migrations/0009_remove_avitoaccountdailystats_expenses_details.py
+dd/settings.py

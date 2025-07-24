@@ -75,24 +75,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dd.wsgi.application'
 
-# if LOCAL == 'True':
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if LOCAL == 'True':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
-# else:
-#     DATABASES = {
-#         "default": {
-#             "ENGINE": "django.db.backends.mysql",
-#             "NAME": os.getenv("NAME_DB"),
-#             "USER": os.getenv("NAME_DB"),
-#             "PASSWORD": os.getenv("PASS_DB"),
-#             "HOST": "127.0.0.1",
-#         }
-#     }
-
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.getenv("NAME_DB"),
+            "USER": os.getenv("NAME_DB"),
+            "PASSWORD": os.getenv("PASS_DB"),
+            "HOST": "127.0.0.1",
+        }
+    }
 # Password validation
 # https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators
 

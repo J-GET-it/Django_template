@@ -947,7 +947,7 @@ def format_daily_report_new(account, response, previous_stats):
         expenses_total = getattr(account, 'daily_expense', 0)
         
     if contacts > 0 and expenses_total > 0:
-        contact_cost = expenses_total / contacts
+        contact_cost = expenses_total / contacts / 100
         if previous_stats and previous_stats.contacts > 0 and previous_stats.daily_expense > 0:
             prev_contact_cost = previous_stats.daily_expense / previous_stats.contacts
             percentage_contact_cost = calculate_percentage_change(contact_cost, prev_contact_cost)
@@ -1013,7 +1013,8 @@ def format_daily_report_new(account, response, previous_stats):
     
     # Балансы
     message_text += f"—————————\n"
-    message_text += f"CPA баланс: {response['balance_real']:,} ₽\n".replace(',', ' ')
+    print(response)
+    message_text += f"CPA баланс: {response['advance']:,} ₽\n".replace(',', ' ')
     
     # Кошелек (сумма реального баланса и бонусов)
     wallet = response['balance_real'] + response['balance_bonus']
@@ -1292,7 +1293,7 @@ def format_weekly_report_new(account, response, previous_stats):
         expenses_total = getattr(account, 'weekly_expense', 0)
         
     if contacts > 0 and expenses_total > 0:
-        contact_cost = expenses_total / contacts
+        contact_cost = expenses_total / contacts / 100
         if previous_stats and previous_stats.contacts > 0 and previous_stats.daily_expense > 0:
             prev_contact_cost = previous_stats.daily_expense / previous_stats.contacts
             percentage_contact_cost = calculate_percentage_change(contact_cost, prev_contact_cost)
@@ -1358,7 +1359,7 @@ def format_weekly_report_new(account, response, previous_stats):
     
     # Балансы
     message_text += f"—————————\n"
-    message_text += f"CPA баланс: {response['balance_real']:,} ₽\n".replace(',', ' ')
+    message_text += f"CPA баланс: {response['advance']:,} ₽\n".replace(',', ' ')
     
     # Кошелек (сумма реального баланса и бонусов)
     wallet = response['balance_real'] + response['balance_bonus']

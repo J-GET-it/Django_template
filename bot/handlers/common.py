@@ -190,12 +190,13 @@ def get_previous_day_stats(account_id, current_date):
     """Получает статистику за предыдущий день"""
     try:
         # Получаем дату предыдущего дня
-        previous_date = current_date - datetime.timedelta(days=1)
+        previous_date = current_date
         # Ищем статистику за предыдущий день
         previous_stats = AvitoAccountDailyStats.objects.filter(
             avito_account_id=account_id,
             date=previous_date
         ).first()
+        print(account_id, previous_date)
         return previous_stats
     except Exception as e:
         logger.error(f"Ошибка при получении статистики за предыдущий день: {e}")
@@ -267,7 +268,7 @@ def daily_report_for_account(chat_id, account_id):
         bot.delete_message(chat_id, loading_message.message_id)
         
         # Получаем дату текущего отчета в формате datetime.date
-        today_date = datetime.datetime.strptime(response['date'], '%Y-%m-%d').date()
+        today_date = datetime.datetime.now().strptime(response['date'], '%Y-%m-%d').date()
         
         # Получаем статистику за предыдущий день
         previous_stats = get_previous_day_stats(account_id, today_date)

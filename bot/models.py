@@ -178,6 +178,14 @@ class AvitoAccountDailyStats(models.Model):
     favorites = models.IntegerField(
         verbose_name='В избранном',
         default=0
+    )    
+    impressions = models.IntegerField(
+        verbose_name='Показы',
+        default=0
+    )
+    impressionsToViewsConversion = models.IntegerField(
+        verbose_name='Конверсия показов в просмотры',
+        default=0
     )
     
     # Финансы

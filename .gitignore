@@ -145,3 +145,5 @@ dmypy.json
 bot/migrations/0009_remove_avitoaccountdailystats_expenses_details.py
 settings.py
 */settings.py
+bot/migrations/0010_avitoaccountdailystats_contact_cost_and_more.py
+bot/migrations/0011_remove_avitoaccountdailystats_contact_cost.py

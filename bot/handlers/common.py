@@ -189,14 +189,14 @@ def format_percentage_change(percentage, show_positive=True):
 def get_previous_day_stats(account_id, current_date):
     """Получает статистику за предыдущий день"""
     try:
-        # Получаем дату предыдущего дня
-        previous_date = current_date
+        # Получаем дату предыдущего дня        
+        previous_date = current_date - datetime.timedelta(days=1)
         # Ищем статистику за предыдущий день
         previous_stats = AvitoAccountDailyStats.objects.filter(
             avito_account_id=account_id,
             date=previous_date
         ).first()
-        print(account_id, previous_date)
+        
         return previous_stats
     except Exception as e:
         logger.error(f"Ошибка при получении статистики за предыдущий день: {e}")
@@ -263,12 +263,48 @@ def daily_report_for_account(chat_id, account_id):
         client_id = account.client_id
         client_secret = account.client_secret
         response = get_daily_statistics(client_id, client_secret)
-        
+
         # Удаляем сообщение о загрузке после получения данных
         bot.delete_message(chat_id, loading_message.message_id)
         
         # Получаем дату текущего отчета в формате datetime.date
         today_date = datetime.datetime.now().strptime(response['date'], '%Y-%m-%d').date()
+        
+        expenses_total = 0
+        # Если expenses - словарь с ключом total, берем значение
+        if isinstance(response.get('expenses', {}), dict) and 'total' in response.get('expenses', {}):
+            expenses_val = response.get('expenses', {}).get('total', 0)
+            if isinstance(expenses_val, (int, float)):
+                expenses_total = expenses_val
+        # Иначе берем расход из аккаунта
+        else:
+            expenses_total = getattr(account, 'daily_expense', 0)
+        AvitoAccountDailyStats.objects.update_or_create(
+            avito_account_id=account_id,
+            date=today_date,
+            defaults={
+                'total_calls': response.get('calls', {}).get('total', 0),
+                'answered_calls': response.get('calls', {}).get('answered', 0),
+                'missed_calls': response.get('calls', {}).get('missed', 0),
+                'total_chats': response.get('chats', {}).get('total', 0),
+                'new_chats': response.get('chats', {}).get('new', 0),
+                'phones_received': response.get('phones_received', 0),
+                'rating': response.get('rating', 0),
+                'total_reviews': response.get('reviews', {}).get('total', 0),
+                'daily_reviews': response.get('reviews', {}).get('today', 0),
+                'total_items': response.get('items', {}).get('total', 0),
+                'xl_promotion_count': response.get('items', {}).get('with_xl_promotion', 0),
+                'views': response.get('statistics', {}).get('views', 0),
+                'contacts': response.get('statistics', {}).get('contacts', 0),
+                'favorites': response.get('statistics', {}).get('favorites', 0),
+                'impressions': response.get('statistics', {}).get('impressions', 0),
+                'impressionsToViewsConversion': response.get('statistics', {}).get('impressionsToViewsConversion', 0),
+                'balance_real': response.get('balance_real', 0),
+                'balance_bonus': response.get('balance_bonus', 0),
+                'advance': response.get('advance', 0),
+                'daily_expense': expenses_total
+            }
+        )
         
         # Получаем статистику за предыдущий день
         previous_stats = get_previous_day_stats(account_id, today_date)
@@ -579,6 +615,7 @@ def send_daily_report(telegram_id, account_id):
         report_format = Settings.get_value("report_format", "new")
         
         # Используем соответствующий формат отчета
+
         if report_format == "new":
             message_text = format_daily_report_new(account, response, previous_stats)
         else:
